@@ -8,27 +8,25 @@ export default function App() {
     email: "",
     phone: "",
     description: "",
-    role: "victim"
+    role: "victim",
   });
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
   const [edited, setEdited] = useState("");
-
-  // Holds institution metadata returned from backend
   const [meta, setMeta] = useState({
     primaryInstitution: null,
     throughInstitution: null,
-    ccList: []
+    ccList: [],
   });
 
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   // VOICE TO TEXT
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   function startVoice() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -42,20 +40,21 @@ export default function App() {
       setForm((prev) => ({
         ...prev,
         description:
-          (prev.description ? prev.description + " " : "") +
-          event.results[0][0].transcript
+          prev.description
+            ? prev.description + " " + event.results[0][0].transcript
+            : event.results[0][0].transcript,
       }));
     };
 
     recognition.start();
   }
 
-  // ---------------------------------------------------------
-  // SUBMIT FORM
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
+  // SUBMIT FORM (CALL BACKEND AI)
+  // --------------------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
-      alert("Full name and complaint description are required");
+      alert("Full name and complaint description are required.");
       return;
     }
 
@@ -72,23 +71,23 @@ export default function App() {
       setMeta({
         primaryInstitution: response.primaryInstitution,
         throughInstitution: response.throughInstitution,
-        ccList: response.ccList || []
+        ccList: response.ccList || [],
       });
     }
   }
 
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   // COPY TEXT
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   function copyText() {
     if (!edited) return alert("Nothing to copy.");
     navigator.clipboard.writeText(edited);
     alert("Petition copied!");
   }
 
-  // ---------------------------------------------------------
-  // SEND EMAIL (Uses JSON metadata)
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
+  // SEND EMAIL
+  // --------------------------------------------------------------
   function sendEmail() {
     if (!edited) return alert("Generate the petition first.");
 
@@ -121,9 +120,9 @@ export default function App() {
     window.location.href = mailto;
   }
 
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   // DOWNLOAD PDF
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   function downloadPDF() {
     if (!edited) return alert("Generate a petition first.");
 
@@ -136,20 +135,20 @@ export default function App() {
     doc.save("petition.pdf");
   }
 
-  // ---------------------------------------------------------
-  // PAY BUTTON (Placeholder)
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
+  // PAYMENT PLACEHOLDER
+  // --------------------------------------------------------------
   function handlePay() {
     alert("Payment integration coming soon.");
   }
 
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   // FRONTEND UI
-  // ---------------------------------------------------------
+  // --------------------------------------------------------------
   return (
     <div style={{ padding: "15px", fontFamily: "Arial" }}>
-      <h2 style={{ textAlign: "center", marginBottom: "10px" }}>
-        ⚖️ JusticeBot — AI Petition Writer
+      <h2 style={{ textAlign: "center", marginBottom: "12px", color: "#0b6623" }}>
+        📝 PetitionDesk — AI Petition Writer
       </h2>
 
       {/* ROLE */}
@@ -239,6 +238,7 @@ export default function App() {
             )}
           </div>
 
+          {/* EDIT BOX */}
           <textarea
             style={editBox}
             value={edited}
@@ -246,10 +246,21 @@ export default function App() {
           />
 
           <div style={{ marginTop: "10px", display: "flex" }}>
-            <button onClick={copyText} style={smallButton}>Copy</button>
-            <button onClick={sendEmail} style={smallButton}>Email</button>
-            <button onClick={downloadPDF} style={smallButton}>PDF</button>
-            <button onClick={handlePay} style={smallButton}>Pay</button>
+            <button onClick={copyText} style={smallButton}>
+              Copy Text
+            </button>
+
+            <button onClick={sendEmail} style={smallButton}>
+              Email
+            </button>
+
+            <button onClick={downloadPDF} style={smallButton}>
+              Download PDF
+            </button>
+
+            <button onClick={handlePay} style={smallButton}>
+              Pay
+            </button>
           </div>
         </div>
       )}
@@ -257,16 +268,15 @@ export default function App() {
   );
 }
 
-// ---------------------------------------------------------
+// --------------------------------------------------------------
 // STYLES
-// ---------------------------------------------------------
-
+// --------------------------------------------------------------
 const inputStyle = {
   width: "100%",
   padding: "12px",
   marginBottom: "10px",
   border: "1px solid #ccc",
-  borderRadius: "6px"
+  borderRadius: "6px",
 };
 
 const textareaStyle = {
@@ -275,29 +285,29 @@ const textareaStyle = {
   height: "150px",
   marginBottom: "10px",
   border: "1px solid #ccc",
-  borderRadius: "6px"
+  borderRadius: "6px",
 };
 
 const buttonStyle = {
   width: "100%",
   padding: "12px",
-  background: "#1b5e20",
+  background: "#0b6623",
   color: "white",
   border: "none",
   borderRadius: "6px",
   marginBottom: "10px",
-  fontSize: "16px"
+  fontSize: "16px",
 };
 
 const voiceButton = {
   width: "100%",
   padding: "12px",
-  background: "#444",
+  background: "#333",
   color: "white",
   border: "none",
   borderRadius: "6px",
-  marginBottom: "20px",
-  fontSize: "16px"
+  fontSize: "16px",
+  marginBottom: "15px",
 };
 
 const resultBox = {
@@ -305,7 +315,7 @@ const resultBox = {
   background: "#f1f8e9",
   borderRadius: "6px",
   border: "1px solid #c5e1a5",
-  marginTop: "10px"
+  marginTop: "10px",
 };
 
 const institutionBox = {
@@ -313,17 +323,17 @@ const institutionBox = {
   borderRadius: "6px",
   background: "white",
   marginBottom: "10px",
-  border: "1px solid #ddd"
+  border: "1px solid #ddd",
 };
 
 const institutionLabel = {
   fontWeight: "bold",
-  marginBottom: "4px"
+  marginBottom: "4px",
 };
 
 const institutionText = {
   whiteSpace: "pre-line",
-  marginTop: 0
+  marginTop: 0,
 };
 
 const editBox = {
@@ -333,16 +343,15 @@ const editBox = {
   borderRadius: "6px",
   border: "1px solid #ccc",
   whiteSpace: "pre-wrap",
-  marginTop: "10px"
+  marginTop: "10px",
 };
 
 const smallButton = {
-  padding: "10px 14px",
-  marginRight: "10px",
-  marginTop: "10px",
+  padding: "10px 12px",
+  marginRight: "8px",
   borderRadius: "6px",
   border: "none",
   background: "#2e7d32",
   color: "white",
-  fontSize: "14px"
+  fontSize: "14px",
 };
