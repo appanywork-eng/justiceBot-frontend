@@ -15,6 +15,7 @@ export default function App() {
   const [result, setResult] = useState("");
   const [edited, setEdited] = useState("");
   const [meta, setMeta] = useState({
+    recipientInstitution: null,
     primaryInstitution: null,
     throughInstitution: null,
     ccList: [],
@@ -39,10 +40,9 @@ export default function App() {
     recognition.onresult = (event) => {
       setForm((prev) => ({
         ...prev,
-        description:
-          prev.description
-            ? prev.description + " " + event.results[0][0].transcript
-            : event.results[0][0].transcript,
+        description: prev.description
+          ? prev.description + " " + event.results[0][0].transcript
+          : event.results[0][0].transcript,
       }));
     };
 
@@ -50,7 +50,7 @@ export default function App() {
   }
 
   // --------------------------------------------------------------
-  // SUBMIT FORM (CALL BACKEND AI)
+  // SUBMIT FORM
   // --------------------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
@@ -69,8 +69,9 @@ export default function App() {
       setEdited(response.petitionText);
 
       setMeta({
-        primaryInstitution: response.primaryInstitution,
-        throughInstitution: response.throughInstitution,
+        recipientInstitution: response.recipientInstitution || null,
+        primaryInstitution: response.primaryInstitution || null,
+        throughInstitution: response.throughInstitution || null,
         ccList: response.ccList || [],
       });
     }
@@ -86,12 +87,15 @@ export default function App() {
   }
 
   // --------------------------------------------------------------
-  // SEND EMAIL
+  // SEND EMAIL (Corrected for ALL institutions)
   // --------------------------------------------------------------
   function sendEmail() {
     if (!edited) return alert("Generate the petition first.");
 
     const allEmails = [];
+
+    if (meta.recipientInstitution?.email)
+      allEmails.push(meta.recipientInstitution.email);
 
     if (meta.primaryInstitution?.email)
       allEmails.push(meta.primaryInstitution.email);
@@ -210,8 +214,14 @@ export default function App() {
         <div style={resultBox}>
           <h3>Generated Petition</h3>
 
-          {/* METADATA */}
           <div style={institutionBox}>
+            {meta.recipientInstitution && (
+              <>
+                <p style={institutionLabel}>Recipient:</p>
+                <p style={institutionText}>{meta.recipientInstitution.org}</p>
+              </>
+            )}
+
             {meta.primaryInstitution && (
               <>
                 <p style={institutionLabel}>Primary:</p>
@@ -247,7 +257,7 @@ export default function App() {
 
           <div style={{ marginTop: "10px", display: "flex" }}>
             <button onClick={copyText} style={smallButton}>
-              Copy Text
+              Copy
             </button>
 
             <button onClick={sendEmail} style={smallButton}>
@@ -255,7 +265,7 @@ export default function App() {
             </button>
 
             <button onClick={downloadPDF} style={smallButton}>
-              Download PDF
+              PDF
             </button>
 
             <button onClick={handlePay} style={smallButton}>
