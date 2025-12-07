@@ -25,9 +25,9 @@ export default function App() {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   // VOICE TO TEXT
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   function startVoice() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -49,9 +49,9 @@ export default function App() {
     recognition.start();
   }
 
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   // SUBMIT FORM
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
       alert("Full name and complaint description are required.");
@@ -68,27 +68,39 @@ export default function App() {
       setResult(response.petitionText);
       setEdited(response.petitionText);
 
+      // ---------- FIX: Robust A8 + legacy compatibility ----------
+      const primary =
+        response.primaryInstitution ||
+        response.recipientInstitution ||
+        null;
+
+      const recipient =
+        response.recipientInstitution ||
+        response.primaryInstitution ||
+        null;
+
       setMeta({
-        recipientInstitution: response.recipientInstitution || null,
-        primaryInstitution: response.primaryInstitution || null,
+        recipientInstitution: recipient,
+        primaryInstitution: primary,
         throughInstitution: response.throughInstitution || null,
         ccList: response.ccList || [],
       });
+      // -----------------------------------------------------------
     }
   }
 
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   // COPY TEXT
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   function copyText() {
     if (!edited) return alert("Nothing to copy.");
     navigator.clipboard.writeText(edited);
     alert("Petition copied!");
   }
 
-  // --------------------------------------------------------------
-  // SEND EMAIL (Corrected for ALL institutions)
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
+  // SEND EMAIL (Corrected)
+  // -------------------------------------------------------------
   function sendEmail() {
     if (!edited) return alert("Generate the petition first.");
 
@@ -104,7 +116,7 @@ export default function App() {
       allEmails.push(meta.throughInstitution.email);
 
     meta.ccList.forEach((c) => {
-      if (c.email) allEmails.push(c.email);
+      if (c && c.email) allEmails.push(c.email);
     });
 
     const unique = [...new Set(allEmails)].filter(Boolean);
@@ -112,7 +124,16 @@ export default function App() {
     const to = unique[0] || "";
     const cc = unique.slice(1).join(",");
 
-    const subject = `Petition from ${form.fullName}`;
+    // Extract "RE:" subject from petition if available
+    let subject = `Petition from ${form.fullName || "Complainant"}`;
+    if (edited) {
+      const lines = edited.split("\n");
+      const reLine = lines.find((l) =>
+        l.trim().toUpperCase().startsWith("RE:")
+      );
+      if (reLine) subject = reLine.replace(/^RE:\s*/i, "").trim();
+    }
+
     const body = edited;
 
     let mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
@@ -124,35 +145,35 @@ export default function App() {
     window.location.href = mailto;
   }
 
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   // DOWNLOAD PDF
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   function downloadPDF() {
     if (!edited) return alert("Generate a petition first.");
 
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const margin = 40;
     const width = doc.internal.pageSize.getWidth() - margin * 2;
-
     const lines = doc.splitTextToSize(edited, width);
+
     doc.text(lines, margin, margin);
     doc.save("petition.pdf");
   }
 
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   // PAYMENT PLACEHOLDER
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   function handlePay() {
     alert("Payment integration coming soon.");
   }
 
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   // FRONTEND UI
-  // --------------------------------------------------------------
+  // -------------------------------------------------------------
   return (
     <div style={{ padding: "15px", fontFamily: "Arial" }}>
-      <h2 style={{ textAlign: "center", marginBottom: "12px", color: "#0b6623" }}>
-        📝 PetitionDesk — AI Petition Writer
+      <h2 style={{ textAlign: "center", marginBottom: "12px" }}>
+        📝 PetitionDesk – AI Petition Writer
       </h2>
 
       {/* ROLE */}
@@ -278,9 +299,9 @@ export default function App() {
   );
 }
 
-// --------------------------------------------------------------
+// -------------------------------------------------------------
 // STYLES
-// --------------------------------------------------------------
+// -------------------------------------------------------------
 const inputStyle = {
   width: "100%",
   padding: "12px",
@@ -343,7 +364,6 @@ const institutionLabel = {
 
 const institutionText = {
   whiteSpace: "pre-line",
-  marginTop: 0,
 };
 
 const editBox = {
