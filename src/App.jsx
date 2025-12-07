@@ -14,6 +14,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
   const [edited, setEdited] = useState("");
+
   const [meta, setMeta] = useState({
     recipientInstitution: null,
     primaryInstitution: null,
@@ -45,12 +46,11 @@ export default function App() {
           : event.results[0][0].transcript,
       }));
     };
-
     recognition.start();
   }
 
   // -------------------------------------------------------------
-  // SUBMIT FORM
+  // SUBMIT FORM (A8 Compatible)
   // -------------------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
@@ -64,33 +64,29 @@ export default function App() {
 
     if (response.error) {
       alert(response.error);
-    } else {
-      setResult(response.petitionText);
-      setEdited(response.petitionText);
-
-      // ---------- FIX: Robust A8 + legacy compatibility ----------
-      const primary =
-        response.primaryInstitution ||
-        response.recipientInstitution ||
-        null;
-
-      const recipient =
-        response.recipientInstitution ||
-        response.primaryInstitution ||
-        null;
-
-      setMeta({
-        recipientInstitution: recipient,
-        primaryInstitution: primary,
-        throughInstitution: response.throughInstitution || null,
-        ccList: response.ccList || [],
-      });
-      // -----------------------------------------------------------
+      return;
     }
+
+    // Petition text
+    setResult(response.petitionText);
+    setEdited(response.petitionText);
+
+    // -------------------------
+    // A8 → Frontend Mapping Fix
+    // -------------------------
+    const primary = response.primaryInstitution || null;
+    const recipient = response.recipientInstitution || primary || null;
+
+    setMeta({
+      recipientInstitution: recipient,
+      primaryInstitution: primary,
+      throughInstitution: response.throughInstitution || null,
+      ccList: Array.isArray(response.ccList) ? response.ccList : [],
+    });
   }
 
   // -------------------------------------------------------------
-  // COPY TEXT
+  // COPY
   // -------------------------------------------------------------
   function copyText() {
     if (!edited) return alert("Nothing to copy.");
@@ -99,10 +95,13 @@ export default function App() {
   }
 
   // -------------------------------------------------------------
-  // SEND EMAIL (Corrected)
+  // EMAIL FIX — Unique CC + Robust
   // -------------------------------------------------------------
   function sendEmail() {
-    if (!edited) return alert("Generate the petition first.");
+    if (!edited) {
+      alert("Generate the petition first.");
+      return;
+    }
 
     const allEmails = [];
 
@@ -115,24 +114,20 @@ export default function App() {
     if (meta.throughInstitution?.email)
       allEmails.push(meta.throughInstitution.email);
 
-    meta.ccList.forEach((c) => {
-      if (c && c.email) allEmails.push(c.email);
+    meta.ccList.forEach((i) => {
+      if (i?.email) allEmails.push(i.email);
     });
 
     const unique = [...new Set(allEmails)].filter(Boolean);
-
     const to = unique[0] || "";
     const cc = unique.slice(1).join(",");
 
-    // Extract "RE:" subject from petition if available
-    let subject = `Petition from ${form.fullName || "Complainant"}`;
-    if (edited) {
-      const lines = edited.split("\n");
-      const reLine = lines.find((l) =>
-        l.trim().toUpperCase().startsWith("RE:")
-      );
-      if (reLine) subject = reLine.replace(/^RE:\s*/i, "").trim();
-    }
+    // Extract RE:
+    let subject = `Petition from ${form.fullName}`;
+    const found = edited.split("\n").find((l) =>
+      l.trim().toUpperCase().startsWith("RE:")
+    );
+    if (found) subject = found.replace(/^RE:\s*/i, "").trim();
 
     const body = edited;
 
@@ -146,7 +141,7 @@ export default function App() {
   }
 
   // -------------------------------------------------------------
-  // DOWNLOAD PDF
+  // PDF
   // -------------------------------------------------------------
   function downloadPDF() {
     if (!edited) return alert("Generate a petition first.");
@@ -160,15 +155,13 @@ export default function App() {
     doc.save("petition.pdf");
   }
 
-  // -------------------------------------------------------------
-  // PAYMENT PLACEHOLDER
-  // -------------------------------------------------------------
+  // Placeholder payment
   function handlePay() {
     alert("Payment integration coming soon.");
   }
 
   // -------------------------------------------------------------
-  // FRONTEND UI
+  // UI
   // -------------------------------------------------------------
   return (
     <div style={{ padding: "15px", fontFamily: "Arial" }}>
@@ -235,6 +228,7 @@ export default function App() {
         <div style={resultBox}>
           <h3>Generated Petition</h3>
 
+          {/* Institutions */}
           <div style={institutionBox}>
             {meta.recipientInstitution && (
               <>
@@ -269,7 +263,7 @@ export default function App() {
             )}
           </div>
 
-          {/* EDIT BOX */}
+          {/* Editable petition */}
           <textarea
             style={editBox}
             value={edited}

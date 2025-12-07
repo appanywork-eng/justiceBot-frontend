@@ -8,7 +8,7 @@ export async function generatePetition(form) {
       body: JSON.stringify(form),
     });
 
-    // If backend is cold, Render may take 2–4 seconds automatically
+    // Handle cold-start
     if (!response.ok) {
       return { error: "Server error. Try again." };
     }
