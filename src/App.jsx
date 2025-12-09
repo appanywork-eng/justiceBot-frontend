@@ -12,6 +12,8 @@ export default function App() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [paying, setPaying] = useState(false);
+
   const [result, setResult] = useState("");
   const [edited, setEdited] = useState("");
 
@@ -22,15 +24,19 @@ export default function App() {
     ccList: [],
   });
 
+  // ------------------------------------------------------------
+  // FORM HANDLERS
+  // ------------------------------------------------------------
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
   // VOICE TO TEXT
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
   function startVoice() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SR =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       alert("Voice to text not supported on this device");
       return;
@@ -49,9 +55,9 @@ export default function App() {
     recognition.start();
   }
 
-  // -------------------------------------------------------------
-  // SUBMIT FORM (A8 Compatible)
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
+  // SUBMIT FORM (A8 / A11 Compatible)
+  // ------------------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
       alert("Full name and complaint description are required.");
@@ -71,11 +77,9 @@ export default function App() {
     setResult(response.petitionText);
     setEdited(response.petitionText);
 
-    // -------------------------
-    // A8 → Frontend Mapping Fix
-    // -------------------------
+    // Frontend mapping fix
     const primary = response.primaryInstitution || null;
-    const recipient = response.recipientInstitution || primary || null;
+    const recipient = response.recipientInstitution || primary;
 
     setMeta({
       recipientInstitution: recipient,
@@ -85,18 +89,18 @@ export default function App() {
     });
   }
 
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
   // COPY
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
   function copyText() {
     if (!edited) return alert("Nothing to copy.");
     navigator.clipboard.writeText(edited);
     alert("Petition copied!");
   }
 
-  // -------------------------------------------------------------
-  // EMAIL FIX — Unique CC + Robust
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
+  // EMAIL
+  // ------------------------------------------------------------
   function sendEmail() {
     if (!edited) {
       alert("Generate the petition first.");
@@ -122,27 +126,29 @@ export default function App() {
     const to = unique[0] || "";
     const cc = unique.slice(1).join(",");
 
-    // Extract RE:
+    // Extract RE/Subject from petition if present
     let subject = `Petition from ${form.fullName}`;
-    const found = edited.split("\n").find((l) =>
-      l.trim().toUpperCase().startsWith("RE:")
-    );
-    if (found) subject = found.replace(/^RE:\s*/i, "").trim();
+    const found = edited
+      .split("\n")
+      .find((l) => l.trim().toUpperCase().startsWith("RE:"));
+    if (found)
+      subject = found.replace(/^RE:\s*/i, "").trim() || subject;
 
     const body = edited;
 
-    let mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(body)}`;
-
+    let mailto = `mailto:${encodeURIComponent(
+      to
+    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
+      body
+    )}`;
     if (cc) mailto += `&cc=${encodeURIComponent(cc)}`;
 
     window.location.href = mailto;
   }
 
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
   // PDF
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
   function downloadPDF() {
     if (!edited) return alert("Generate a petition first.");
 
@@ -155,14 +161,141 @@ export default function App() {
     doc.save("petition.pdf");
   }
 
-  // Placeholder payment
-  function handlePay() {
-    alert("Payment integration coming soon.");
+  // ------------------------------------------------------------
+  // PAY – Calls backend /pay (Flutterwave)
+  // ------------------------------------------------------------
+  async function handlePay() {
+    if (!edited) {
+      alert("Generate the petition first.");
+      return;
+    }
+
+    try {
+      setPaying(true);
+
+      const res = await fetch("/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: 1500, // NGN – change later if you want tiers
+          currency: "NGN",
+          fullName: form.fullName || "PetitionDesk User",
+          email: form.email || "no-email@petitiondesk.com",
+          description: form.description,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.paymentLink) {
+        console.error("Payment init failed:", data);
+        alert(
+          data.error ||
+            "Unable to start payment. Please try again later."
+        );
+        setPaying(false);
+        return;
+      }
+
+      // Redirect user to Flutterwave hosted payment page
+      window.location.href = data.paymentLink;
+    } catch (err) {
+      console.error("Payment error:", err);
+      alert("Payment error. Please try again.");
+      setPaying(false);
+    }
   }
 
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
+  // STYLES
+  // ------------------------------------------------------------
+  const inputStyle = {
+    width: "100%",
+    padding: "12px",
+    marginBottom: "10px",
+    border: "1px solid #ccc",
+    borderRadius: "6px",
+  };
+
+  const textareaStyle = {
+    width: "100%",
+    padding: "12px",
+    marginBottom: "10px",
+    height: "150px",
+    border: "1px solid #ccc",
+    borderRadius: "6px",
+  };
+
+  const buttonStyle = {
+    width: "100%",
+    padding: "12px",
+    background: "#0b6623",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    marginBottom: "10px",
+    fontSize: "16px",
+  };
+
+  const voiceButton = {
+    width: "100%",
+    padding: "12px",
+    background: "#333",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "16px",
+    marginBottom: "15px",
+  };
+
+  const resultBox = {
+    padding: "15px",
+    background: "#f1f8e9",
+    borderRadius: "6px",
+    border: "1px solid #c5e1a5",
+    marginTop: "10px",
+  };
+
+  const institutionBox = {
+    padding: "10px",
+    borderRadius: "6px",
+    background: "white",
+    marginBottom: "10px",
+    border: "1px solid #ddd",
+  };
+
+  const institutionLabel = {
+    fontWeight: "bold",
+    marginBottom: "4px",
+  };
+
+  const institutionText = {
+    whiteSpace: "pre-line",
+  };
+
+  const editBox = {
+    width: "100%",
+    height: "350px",
+    padding: "12px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    whiteSpace: "pre-wrap",
+    marginTop: "10px",
+  };
+
+  const smallButton = {
+    padding: "10px 12px",
+    marginRight: "8px",
+    border: "none",
+    borderRadius: "6px",
+    background: "#2e7d32",
+    color: "white",
+    fontSize: "14px",
+  };
+
+  // ------------------------------------------------------------
   // UI
-  // -------------------------------------------------------------
+  // ------------------------------------------------------------
   return (
     <div style={{ padding: "15px", fontFamily: "Arial" }}>
       <h2 style={{ textAlign: "center", marginBottom: "12px" }}>
@@ -220,7 +353,7 @@ export default function App() {
       </button>
 
       <button onClick={startVoice} style={voiceButton}>
-        🎤 Voice to Text
+        🎙️ Voice to Text
       </button>
 
       {/* RESULT */}
@@ -233,21 +366,27 @@ export default function App() {
             {meta.recipientInstitution && (
               <>
                 <p style={institutionLabel}>Recipient:</p>
-                <p style={institutionText}>{meta.recipientInstitution.org}</p>
+                <p style={institutionText}>
+                  {meta.recipientInstitution.org}
+                </p>
               </>
             )}
 
             {meta.primaryInstitution && (
               <>
                 <p style={institutionLabel}>Primary:</p>
-                <p style={institutionText}>{meta.primaryInstitution.org}</p>
+                <p style={institutionText}>
+                  {meta.primaryInstitution.org}
+                </p>
               </>
             )}
 
             {meta.throughInstitution && (
               <>
                 <p style={institutionLabel}>Through:</p>
-                <p style={institutionText}>{meta.throughInstitution.org}</p>
+                <p style={institutionText}>
+                  {meta.throughInstitution.org}
+                </p>
               </>
             )}
 
@@ -270,7 +409,9 @@ export default function App() {
             onChange={(e) => setEdited(e.target.value)}
           />
 
-          <div style={{ marginTop: "10px", display: "flex" }}>
+          <div
+            style={{ marginTop: "10px", display: "flex", flexWrap: "wrap" }}
+          >
             <button onClick={copyText} style={smallButton}>
               Copy
             </button>
@@ -283,8 +424,12 @@ export default function App() {
               PDF
             </button>
 
-            <button onClick={handlePay} style={smallButton}>
-              Pay
+            <button
+              onClick={handlePay}
+              style={smallButton}
+              disabled={paying}
+            >
+              {paying ? "Redirecting..." : "Pay"}
             </button>
           </div>
         </div>
@@ -292,90 +437,3 @@ export default function App() {
     </div>
   );
 }
-
-// -------------------------------------------------------------
-// STYLES
-// -------------------------------------------------------------
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  marginBottom: "10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-};
-
-const textareaStyle = {
-  width: "100%",
-  padding: "12px",
-  height: "150px",
-  marginBottom: "10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-};
-
-const buttonStyle = {
-  width: "100%",
-  padding: "12px",
-  background: "#0b6623",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  marginBottom: "10px",
-  fontSize: "16px",
-};
-
-const voiceButton = {
-  width: "100%",
-  padding: "12px",
-  background: "#333",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  fontSize: "16px",
-  marginBottom: "15px",
-};
-
-const resultBox = {
-  padding: "15px",
-  background: "#f1f8e9",
-  borderRadius: "6px",
-  border: "1px solid #c5e1a5",
-  marginTop: "10px",
-};
-
-const institutionBox = {
-  padding: "10px",
-  borderRadius: "6px",
-  background: "white",
-  marginBottom: "10px",
-  border: "1px solid #ddd",
-};
-
-const institutionLabel = {
-  fontWeight: "bold",
-  marginBottom: "4px",
-};
-
-const institutionText = {
-  whiteSpace: "pre-line",
-};
-
-const editBox = {
-  width: "100%",
-  height: "350px",
-  padding: "12px",
-  borderRadius: "6px",
-  border: "1px solid #ccc",
-  whiteSpace: "pre-wrap",
-  marginTop: "10px",
-};
-
-const smallButton = {
-  padding: "10px 12px",
-  marginRight: "8px",
-  borderRadius: "6px",
-  border: "none",
-  background: "#2e7d32",
-  color: "white",
-  fontSize: "14px",
-};
