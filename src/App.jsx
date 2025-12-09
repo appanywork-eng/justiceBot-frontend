@@ -1,4 +1,3 @@
-// App.jsx
 import { useState } from "react";
 import jsPDF from "jspdf";
 import { generatePetition } from "./api.js";
@@ -22,26 +21,23 @@ export default function App() {
     ccList: [],
   });
 
-  // ----------------------------------------------------
-  // FORM CHANGE
-  // ----------------------------------------------------
+  const [paid, setPaid] = useState(false); // 🔐 PAYMENT LOCK
+
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
   // VOICE TO TEXT
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
   function startVoice() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       alert("Voice to text not supported on this device");
       return;
     }
-
     const recognition = new SR();
     recognition.lang = "en-NG";
-
     recognition.onresult = (event) => {
       setForm((prev) => ({
         ...prev,
@@ -50,13 +46,12 @@ export default function App() {
           : event.results[0][0].transcript,
       }));
     };
-
     recognition.start();
   }
 
-  // ----------------------------------------------------
-  // SUBMIT FORM – Petition Generation
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // SUBMIT FORM → GENERATE PETITION
+  // -------------------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
       alert("Full name and complaint description are required.");
@@ -72,37 +67,29 @@ export default function App() {
       return;
     }
 
-    // Petition text
     setResult(response.petitionText);
     setEdited(response.petitionText);
 
-    // Institutions mapping
-    const primary = response.primaryInstitution || null;
-    const recipient = response.recipientInstitution || primary;
-
     setMeta({
-      recipientInstitution: recipient,
-      primaryInstitution: primary,
+      recipientInstitution: response.recipientInstitution || null,
+      primaryInstitution: response.primaryInstitution || null,
       throughInstitution: response.throughInstitution || null,
       ccList: Array.isArray(response.ccList) ? response.ccList : [],
     });
   }
 
-  // ----------------------------------------------------
-  // COPY PETITION
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // COPY PETITION  (Locked until paid)
+  // -------------------------------------------------------------
   function copyText() {
-    if (!edited) {
-      alert("Nothing to copy.");
-      return;
-    }
+    if (!edited) return alert("Nothing to copy.");
     navigator.clipboard.writeText(edited);
     alert("Petition copied!");
   }
 
-  // ----------------------------------------------------
-  // EMAIL PETITION
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // EMAIL PETITION  (Locked until paid)
+  // -------------------------------------------------------------
   function sendEmail() {
     if (!edited) {
       alert("Generate the petition first.");
@@ -110,13 +97,10 @@ export default function App() {
     }
 
     const allEmails = [];
-
     if (meta.recipientInstitution?.email)
       allEmails.push(meta.recipientInstitution.email);
-
     if (meta.primaryInstitution?.email)
       allEmails.push(meta.primaryInstitution.email);
-
     if (meta.throughInstitution?.email)
       allEmails.push(meta.throughInstitution.email);
 
@@ -134,20 +118,18 @@ export default function App() {
       .find((l) => l.trim().toUpperCase().startsWith("RE:"));
     if (found) subject = found.replace(/^RE:\s*/i, "").trim();
 
-    let mailto = `mailto:${encodeURIComponent(
-      to
-    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-      edited
-    )}`;
+    let mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(edited)}`;
 
     if (cc) mailto += `&cc=${encodeURIComponent(cc)}`;
 
     window.location.href = mailto;
   }
 
-  // ----------------------------------------------------
-  // PDF DOWNLOAD
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // PDF DOWNLOAD  (Locked until paid)
+  // -------------------------------------------------------------
   function downloadPDF() {
     if (!edited) return alert("Generate a petition first.");
 
@@ -160,9 +142,9 @@ export default function App() {
     doc.save("petition.pdf");
   }
 
-  // ----------------------------------------------------
-  // PAYMENT – Flutterwave via Render backend
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // PAYMENT — Flutterwave (Nigeria = 1000, Others = 1500)
+  // -------------------------------------------------------------
   async function handlePay() {
     if (!edited) {
       alert("Generate a petition first.");
@@ -170,145 +152,59 @@ export default function App() {
     }
 
     try {
-      const amount = 1000; // ₦1000 per petition
-      const email = (form.email || "").trim() || "noemail@petitiondesk.com";
-      const fullName = (form.fullName || "").trim() || "PetitionDesk User";
+      // 1️⃣ Detect user country from IP
+      const geo = await fetch("https://api.flutterwave.com/v3/ip", {
+        headers: { Authorization: `Bearer ${import.meta.env.VITE_FLW_SECRET}` },
+      }).then((r) => r.json());
 
-      const res = await fetch(
-        "https://justicebot-backend-6pzy.onrender.com/pay",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount,
-            currency: "NGN",
-            fullName,
-            email,
-            description: edited.slice(0, 200),
-            publicKey: "FLWPUBK-3526f2ccb59b50a2d58582b7c566f6b8-X",
-          }),
-        }
-      );
+      const country = geo?.data?.country || "NG";
 
-      const data = await res.json().catch(() => ({}));
+      // 2️⃣ Amount logic
+      const amount = country === "NG" ? 1000 : 1500;
 
+      // 3️⃣ Create payment session on backend
+      const res = await fetch("/api/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          email: form.email || "noemail@user.com",
+          name: form.fullName,
+          description: "PetitionDesk – AI Petition Payment",
+        }),
+      });
+
+      const data = await res.json();
       const paymentLink =
-        data.paymentLink ||
-        (data.data && data.data.link) ||
-        data.link ||
-        "";
+        data?.link || data?.paymentLink || data?.data?.link;
 
-      if (!res.ok || !paymentLink) {
-        console.error("Payment init error:", data);
-        alert(
-          data.error ||
-            data.message ||
-            "Payment error. Please try again."
-        );
+      if (!paymentLink) {
+        alert("Payment error. Try again.");
         return;
       }
 
+      // Redirect to Flutterwave checkout
       window.location.href = paymentLink;
+
+      // Unlock app after payment
+      setPaid(true);
+
     } catch (err) {
       console.error("Payment error:", err);
-      alert("Payment error. Please try again.");
+      alert("Payment error. Try again.");
     }
   }
 
-  // ----------------------------------------------------
-  // STYLES
-  // ----------------------------------------------------
-  const inputStyle = {
-    width: "100%",
-    padding: "12px",
-    marginBottom: "10px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-  };
+  // -------------------------------------------------------------
+  // UI + BUTTON LOCKS
+  // -------------------------------------------------------------
+  const block = () =>
+    alert("Please make payment first before accessing this feature.");
 
-  const textareaStyle = {
-    width: "100%",
-    padding: "12px",
-    height: "150px",
-    marginBottom: "10px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-  };
-
-  const buttonStyle = {
-    width: "100%",
-    padding: "12px",
-    background: "#0b6623",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    marginBottom: "10px",
-    fontSize: "16px",
-  };
-
-  const voiceButton = {
-    width: "100%",
-    padding: "12px",
-    background: "#333",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    fontSize: "16px",
-    marginBottom: "10px",
-  };
-
-  const resultBox = {
-    padding: "15px",
-    background: "#f1f8e9",
-    borderRadius: "6px",
-    border: "1px solid #c5e1a5",
-    marginTop: "10px",
-  };
-
-  const institutionBox = {
-    padding: "10px",
-    borderRadius: "6px",
-    background: "white",
-    marginBottom: "10px",
-    border: "1px solid #ddd",
-  };
-
-  const institutionLabel = {
-    fontWeight: "bold",
-    marginBottom: "4px",
-  };
-
-  const institutionText = {
-    whiteSpace: "pre-line",
-  };
-
-  const editBox = {
-    width: "100%",
-    height: "350px",
-    padding: "12px",
-    borderRadius: "6px",
-    border: "1px solid #ccc",
-    whiteSpace: "pre-wrap",
-    marginTop: "10px",
-  };
-
-  const smallButton = {
-    padding: "10px 12px",
-    marginRight: "8px",
-    border: "none",
-    borderRadius: "6px",
-    background: "#2e7d32",
-    color: "white",
-    fontSize: "14px",
-  };
-
-  // ----------------------------------------------------
-  // UI
-  // ----------------------------------------------------
   return (
     <div style={{ padding: "15px", fontFamily: "Arial" }}>
       <h2 style={{ textAlign: "center", marginBottom: "12px" }}>
-        📑 PetitionDesk – AI Petition Writer
+        📝 PetitionDesk – AI Petition Writer
       </h2>
 
       {/* ROLE */}
@@ -362,46 +258,13 @@ export default function App() {
       </button>
 
       <button onClick={startVoice} style={voiceButton}>
-        🎙️ Voice to Text
+        🎤 Voice to Text
       </button>
 
       {/* RESULT */}
       {result && (
         <div style={resultBox}>
           <h3>Generated Petition</h3>
-
-          {/* Institutions */}
-          {meta.recipientInstitution && (
-            <div style={institutionBox}>
-              <p style={institutionLabel}>Recipient:</p>
-              <p style={institutionText}>{meta.recipientInstitution.org}</p>
-            </div>
-          )}
-
-          {meta.primaryInstitution && (
-            <div style={institutionBox}>
-              <p style={institutionLabel}>Primary:</p>
-              <p style={institutionText}>{meta.primaryInstitution.org}</p>
-            </div>
-          )}
-
-          {meta.throughInstitution && (
-            <div style={institutionBox}>
-              <p style={institutionLabel}>Through:</p>
-              <p style={institutionText}>{meta.throughInstitution.org}</p>
-            </div>
-          )}
-
-          {meta.ccList.length > 0 && (
-            <div style={institutionBox}>
-              <p style={institutionLabel}>CC:</p>
-              <ul>
-                {meta.ccList.map((i, idx) => (
-                  <li key={idx}>{i.org}</li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           {/* Editable petition */}
           <textarea
@@ -410,22 +273,25 @@ export default function App() {
             onChange={(e) => setEdited(e.target.value)}
           />
 
-          <div
-            style={{
-              marginTop: "10px",
-              display: "flex",
-              flexWrap: "wrap",
-            }}
-          >
-            <button onClick={copyText} style={smallButton}>
+          <div style={{ marginTop: "10px", display: "flex" }}>
+            <button
+              onClick={() => (paid ? copyText() : block())}
+              style={smallButton}
+            >
               Copy
             </button>
 
-            <button onClick={sendEmail} style={smallButton}>
+            <button
+              onClick={() => (paid ? sendEmail() : block())}
+              style={smallButton}
+            >
               Email
             </button>
 
-            <button onClick={downloadPDF} style={smallButton}>
+            <button
+              onClick={() => (paid ? downloadPDF() : block())}
+              style={smallButton}
+            >
               PDF
             </button>
 
@@ -438,3 +304,74 @@ export default function App() {
     </div>
   );
 }
+
+// ----------------------------------
+// STYLES
+// ----------------------------------
+
+const inputStyle = {
+  width: "100%",
+  padding: "12px",
+  marginBottom: "10px",
+  border: "1px solid #ccc",
+  borderRadius: "6px",
+};
+
+const textareaStyle = {
+  width: "100%",
+  padding: "12px",
+  height: "150px",
+  marginBottom: "10px",
+  border: "1px solid #ccc",
+  borderRadius: "6px",
+};
+
+const buttonStyle = {
+  width: "100%",
+  padding: "12px",
+  background: "#0b6623",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  marginBottom: "10px",
+  fontSize: "16px",
+};
+
+const voiceButton = {
+  width: "100%",
+  padding: "12px",
+  background: "#333",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  fontSize: "16px",
+  marginBottom: "10px",
+};
+
+const resultBox = {
+  padding: "15px",
+  background: "#f1f8e9",
+  borderRadius: "6px",
+  border: "1px solid #c5e1a5",
+  marginTop: "10px",
+};
+
+const editBox = {
+  width: "100%",
+  height: "350px",
+  padding: "12px",
+  borderRadius: "6px",
+  border: "1px solid #ccc",
+  whiteSpace: "pre-wrap",
+  marginTop: "10px",
+};
+
+const smallButton = {
+  padding: "10px 12px",
+  marginRight: "8px",
+  borderRadius: "6px",
+  border: "none",
+  background: "#2e7d32",
+  color: "white",
+  fontSize: "14px",
+};
