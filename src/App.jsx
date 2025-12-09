@@ -1,377 +1,620 @@
-import { useState } from "react";
-import jsPDF from "jspdf";
-import { generatePetition } from "./api.js";
+import React, { useState } from "react";
 
-export default function App() {
-  const [form, setForm] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    description: "",
-    role: "victim",
-  });
+const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
+
+function App() {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [description, setDescription] = useState("");
+  const [countryCode, setCountryCode] = useState("NG"); // NG = Nigeria, others = rest of the world
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState("");
-  const [edited, setEdited] = useState("");
-  const [meta, setMeta] = useState({
-    recipientInstitution: null,
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const [petitionText, setPetitionText] = useState("");
+  const [locked, setLocked] = useState(true); // true = preview mode
+  const [hasPaid, setHasPaid] = useState(false);
+
+  const [routing, setRouting] = useState({
     primaryInstitution: null,
     throughInstitution: null,
     ccList: [],
   });
 
-  const [paid, setPaid] = useState(false); // 🔐 PAYMENT LOCK
+  const [error, setError] = useState("");
 
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  }
+  const amountNGN = countryCode === "NG" ? 1000 : 1500;
 
-  // -------------------------------------------------------------
-  // VOICE TO TEXT
-  // -------------------------------------------------------------
-  function startVoice() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      alert("Voice to text not supported on this device");
-      return;
-    }
-    const recognition = new SR();
-    recognition.lang = "en-NG";
-    recognition.onresult = (event) => {
-      setForm((prev) => ({
-        ...prev,
-        description: prev.description
-          ? prev.description + " " + event.results[0][0].transcript
-          : event.results[0][0].transcript,
-      }));
-    };
-    recognition.start();
-  }
+  // Collect all emails from routing (only non-empty)
+  const allEmails = [
+    routing.primaryInstitution?.email,
+    routing.throughInstitution?.email,
+    ...(routing.ccList || []).map((c) => c.email),
+  ].filter((e) => e && e.includes("@"));
 
-  // -------------------------------------------------------------
-  // SUBMIT FORM → GENERATE PETITION
-  // -------------------------------------------------------------
-  async function submitForm() {
-    if (!form.fullName || !form.description) {
-      alert("Full name and complaint description are required.");
+  async function handleGeneratePetition() {
+    setError("");
+    if (!description.trim()) {
+      setError("Please enter your complaint description.");
       return;
     }
 
     setLoading(true);
-    const response = await generatePetition(form);
-    setLoading(false);
-
-    if (response.error) {
-      alert(response.error);
-      return;
-    }
-
-    setResult(response.petitionText);
-    setEdited(response.petitionText);
-
-    setMeta({
-      recipientInstitution: response.recipientInstitution || null,
-      primaryInstitution: response.primaryInstitution || null,
-      throughInstitution: response.throughInstitution || null,
-      ccList: Array.isArray(response.ccList) ? response.ccList : [],
-    });
-  }
-
-  // -------------------------------------------------------------
-  // COPY PETITION  (Locked until paid)
-  // -------------------------------------------------------------
-  function copyText() {
-    if (!edited) return alert("Nothing to copy.");
-    navigator.clipboard.writeText(edited);
-    alert("Petition copied!");
-  }
-
-  // -------------------------------------------------------------
-  // EMAIL PETITION  (Locked until paid)
-  // -------------------------------------------------------------
-  function sendEmail() {
-    if (!edited) {
-      alert("Generate the petition first.");
-      return;
-    }
-
-    const allEmails = [];
-    if (meta.recipientInstitution?.email)
-      allEmails.push(meta.recipientInstitution.email);
-    if (meta.primaryInstitution?.email)
-      allEmails.push(meta.primaryInstitution.email);
-    if (meta.throughInstitution?.email)
-      allEmails.push(meta.throughInstitution.email);
-
-    meta.ccList.forEach((i) => {
-      if (i?.email) allEmails.push(i.email);
-    });
-
-    const unique = [...new Set(allEmails)].filter(Boolean);
-    const to = unique[0] || "";
-    const cc = unique.slice(1).join(",");
-
-    let subject = `Petition from ${form.fullName}`;
-    const found = edited
-      .split("\n")
-      .find((l) => l.trim().toUpperCase().startsWith("RE:"));
-    if (found) subject = found.replace(/^RE:\s*/i, "").trim();
-
-    let mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(edited)}`;
-
-    if (cc) mailto += `&cc=${encodeURIComponent(cc)}`;
-
-    window.location.href = mailto;
-  }
-
-  // -------------------------------------------------------------
-  // PDF DOWNLOAD  (Locked until paid)
-  // -------------------------------------------------------------
-  function downloadPDF() {
-    if (!edited) return alert("Generate a petition first.");
-
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const margin = 40;
-    const width = doc.internal.pageSize.getWidth() - margin * 2;
-    const lines = doc.splitTextToSize(edited, width);
-
-    doc.text(lines, margin, margin);
-    doc.save("petition.pdf");
-  }
-
-  // -------------------------------------------------------------
-  // PAYMENT — Flutterwave (Nigeria = 1000, Others = 1500)
-  // -------------------------------------------------------------
-  async function handlePay() {
-    if (!edited) {
-      alert("Generate a petition first.");
-      return;
-    }
-
     try {
-      // 1️⃣ Detect user country from IP
-      const geo = await fetch("https://api.flutterwave.com/v3/ip", {
-        headers: { Authorization: `Bearer ${import.meta.env.VITE_FLW_SECRET}` },
-      }).then((r) => r.json());
-
-      const country = geo?.data?.country || "NG";
-
-      // 2️⃣ Amount logic
-      const amount = country === "NG" ? 1000 : 1500;
-
-      // 3️⃣ Create payment session on backend
-      const res = await fetch("/api/pay", {
+      const res = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          amount,
-          email: form.email || "noemail@user.com",
-          name: form.fullName,
-          description: "PetitionDesk – AI Petition Payment",
+          fullName,
+          email,
+          phone,
+          address,
+          description,
+          hasPaid, // if true, backend sends full; if false, preview
         }),
       });
 
       const data = await res.json();
-      const paymentLink =
-        data?.link || data?.paymentLink || data?.data?.link;
 
-      if (!paymentLink) {
-        alert("Payment error. Try again.");
+      if (!res.ok) {
+        setError(data.error || "Failed to generate petition.");
+        setPetitionText("");
         return;
       }
 
-      // Redirect to Flutterwave checkout
-      window.location.href = paymentLink;
-
-      // Unlock app after payment
-      setPaid(true);
-
+      setPetitionText(data.petitionText || "");
+      setLocked(data.locked !== false); // default true
+      setRouting({
+        primaryInstitution: data.primaryInstitution || null,
+        throughInstitution: data.throughInstitution || null,
+        ccList: data.ccList || [],
+      });
     } catch (err) {
-      console.error("Payment error:", err);
-      alert("Payment error. Try again.");
+      console.error(err);
+      setError("Network error while generating petition.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  // -------------------------------------------------------------
-  // UI + BUTTON LOCKS
-  // -------------------------------------------------------------
-  const block = () =>
-    alert("Please make payment first before accessing this feature.");
+  async function handlePay() {
+    setError("");
+
+    if (!email.trim() || !fullName.trim()) {
+      setError("Please enter your full name and email before payment.");
+      return;
+    }
+    if (!description.trim()) {
+      setError("Please enter your complaint description before payment.");
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/pay`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName,
+          email,
+          description,
+          countryCode,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.paymentLink) {
+        console.error("Payment init failed:", data);
+        setError(data.error || "Unable to start payment.");
+        return;
+      }
+
+      // Open Flutterwave payment page
+      window.location.href = data.paymentLink;
+    } catch (err) {
+      console.error(err);
+      setError("Network error while initiating payment.");
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
+
+  function handleMarkPaidAndRegenerate() {
+    // User clicks this after successful payment redirect
+    setHasPaid(true);
+    handleGeneratePetition();
+  }
+
+  async function handleCopyPetition() {
+    if (!navigator.clipboard) {
+      setError("Clipboard not available on this device.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(petitionText || "");
+      alert("Petition text copied successfully.");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to copy petition text.");
+    }
+  }
+
+  async function handleCopyEmails() {
+    if (!navigator.clipboard) {
+      setError("Clipboard not available on this device.");
+      return;
+    }
+    if (!allEmails.length) {
+      setError("No valid email addresses to copy.");
+      return;
+    }
+    try {
+      const text = allEmails.join(", ");
+      await navigator.clipboard.writeText(text);
+      alert("Email addresses copied successfully.");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to copy email addresses.");
+    }
+  }
+
+  function handleOpenEmailClient() {
+    if (!allEmails.length) {
+      setError("No valid email addresses available.");
+      return;
+    }
+
+    const toEmail =
+      routing.primaryInstitution?.email || allEmails[0] || "";
+    const ccEmails = allEmails.filter((e) => e !== toEmail);
+
+    const subject = encodeURIComponent(
+      "Petition from PetitionDesk – JusticeBot"
+    );
+    const body = encodeURIComponent(
+      petitionText || "Please paste your petition text here."
+    );
+
+    let mailto = `mailto:${toEmail}?subject=${subject}`;
+    if (ccEmails.length) {
+      mailto += `&cc=${encodeURIComponent(ccEmails.join(","))}`;
+    }
+    mailto += `&body=${body}`;
+
+    window.location.href = mailto;
+  }
 
   return (
-    <div style={{ padding: "15px", fontFamily: "Arial" }}>
-      <h2 style={{ textAlign: "center", marginBottom: "12px" }}>
-        📝 PetitionDesk – AI Petition Writer
-      </h2>
-
-      {/* ROLE */}
-      <select
-        name="role"
-        value={form.role}
-        onChange={handleChange}
-        style={inputStyle}
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0f172a",
+        color: "#e5e7eb",
+        padding: "16px",
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1100px",
+          margin: "0 auto",
+        }}
       >
-        <option value="victim">I am the Victim</option>
-        <option value="representative">Representative</option>
-        <option value="witness">Witness</option>
-        <option value="concerned_citizen">Concerned Citizen</option>
-      </select>
+        {/* HEADER */}
+        <header style={{ marginBottom: "24px", textAlign: "center" }}>
+          <h1 style={{ fontSize: "1.8rem", fontWeight: "700" }}>
+            PetitionDesk / JusticeBot
+          </h1>
+          <p style={{ marginTop: "8px", color: "#9ca3af" }}>
+            Automatic petition drafting + smart routing to the right authorities.
+          </p>
+        </header>
 
-      {/* INPUTS */}
-      <input
-        name="fullName"
-        placeholder="Your Full Name"
-        value={form.fullName}
-        onChange={handleChange}
-        style={inputStyle}
-      />
+        {/* LAYOUT: LEFT FORM / RIGHT PETITION */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: "16px",
+          }}
+        >
+          {/* LEFT PANEL – INPUT FORM & PAYMENT */}
+          <section
+            style={{
+              background: "#020617",
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid #1f2937",
+            }}
+          >
+            <h2 style={{ fontSize: "1.1rem", marginBottom: "10px" }}>
+              1. Your Details
+            </h2>
 
-      <input
-        name="email"
-        placeholder="Email (optional)"
-        value={form.email}
-        onChange={handleChange}
-        style={inputStyle}
-      />
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Full Name"
+                style={inputStyle}
+              />
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                style={inputStyle}
+              />
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone"
+                style={inputStyle}
+              />
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Address (e.g. House no, street, area)"
+                style={inputStyle}
+              />
 
-      <input
-        name="phone"
-        placeholder="Phone (optional)"
-        value={form.phone}
-        onChange={handleChange}
-        style={inputStyle}
-      />
+              <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                <label
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#9ca3af",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    checked={countryCode === "NG"}
+                    onChange={() => setCountryCode("NG")}
+                  />
+                  I am in Nigeria (₦1000)
+                </label>
+                <label
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#9ca3af",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    checked={countryCode !== "NG"}
+                    onChange={() => setCountryCode("OTHER")}
+                  />
+                  Outside Nigeria (₦1500)
+                </label>
+              </div>
+            </div>
 
-      <textarea
-        name="description"
-        placeholder="Explain your complaint clearly..."
-        value={form.description}
-        onChange={handleChange}
-        style={textareaStyle}
-      />
-
-      <button onClick={submitForm} style={buttonStyle}>
-        {loading ? "Generating..." : "Generate Petition"}
-      </button>
-
-      <button onClick={startVoice} style={voiceButton}>
-        🎤 Voice to Text
-      </button>
-
-      {/* RESULT */}
-      {result && (
-        <div style={resultBox}>
-          <h3>Generated Petition</h3>
-
-          {/* Editable petition */}
-          <textarea
-            style={editBox}
-            value={edited}
-            onChange={(e) => setEdited(e.target.value)}
-          />
-
-          <div style={{ marginTop: "10px", display: "flex" }}>
-            <button
-              onClick={() => (paid ? copyText() : block())}
-              style={smallButton}
+            <h2
+              style={{
+                fontSize: "1.1rem",
+                marginTop: "16px",
+                marginBottom: "8px",
+              }}
             >
-              Copy
-            </button>
+              2. Describe Your Complaint
+            </h2>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Explain what happened. Include dates, amounts, names of institutions, steps you have already taken, and what you want them to do."
+              rows={7}
+              style={{
+                ...inputStyle,
+                resize: "vertical",
+                lineHeight: "1.4",
+              }}
+            />
 
-            <button
-              onClick={() => (paid ? sendEmail() : block())}
-              style={smallButton}
+            {/* ACTION BUTTONS */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                marginTop: "12px",
+              }}
             >
-              Email
-            </button>
+              <button
+                onClick={handleGeneratePetition}
+                disabled={loading}
+                style={{
+                  ...buttonPrimary,
+                  opacity: loading ? 0.7 : 1,
+                }}
+              >
+                {loading ? "Generating petition..." : "Generate Petition (Preview)"}
+              </button>
 
-            <button
-              onClick={() => (paid ? downloadPDF() : block())}
-              style={smallButton}
+              <button
+                onClick={handlePay}
+                disabled={paymentLoading}
+                style={{
+                  ...buttonSecondary,
+                  opacity: paymentLoading ? 0.7 : 1,
+                }}
+              >
+                {paymentLoading
+                  ? "Connecting to payment..."
+                  : `Pay & Unlock Full Petition (₦${amountNGN})`}
+              </button>
+
+              <button
+                onClick={handleMarkPaidAndRegenerate}
+                style={{
+                  ...buttonGhost,
+                }}
+              >
+                I have completed payment – unlock my full petition
+              </button>
+            </div>
+
+            {error && (
+              <p
+                style={{
+                  marginTop: "10px",
+                  color: "#f97373",
+                  fontSize: "0.85rem",
+                }}
+              >
+                {error}
+              </p>
+            )}
+          </section>
+
+          {/* RIGHT PANEL – PETITION + ROUTING */}
+          <section
+            style={{
+              background: "#020617",
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid #1f2937",
+              minHeight: "320px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "8px",
+                alignItems: "center",
+                marginBottom: "4px",
+              }}
             >
-              PDF
-            </button>
+              <h2 style={{ fontSize: "1.05rem" }}>3. Generated Petition</h2>
+              <span
+                style={{
+                  fontSize: "0.8rem",
+                  padding: "2px 8px",
+                  borderRadius: "999px",
+                  border: "1px solid #374151",
+                  color: locked ? "#fbbf24" : "#22c55e",
+                }}
+              >
+                {locked ? "PREVIEW ONLY – PAY TO UNLOCK" : "FULL VERSION UNLOCKED"}
+              </span>
+            </div>
 
-            <button onClick={handlePay} style={smallButton}>
-              Pay
-            </button>
-          </div>
+            <div
+              style={{
+                position: "relative",
+                background: "#020617",
+                borderRadius: "8px",
+                border: "1px solid #1f2937",
+                padding: "12px",
+                flex: "1",
+                overflowY: "auto",
+              }}
+            >
+              <pre
+                style={{
+                  whiteSpace: "pre-wrap",
+                  wordWrap: "break-word",
+                  fontSize: "0.85rem",
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                  margin: 0,
+                  userSelect: locked ? "none" : "text",
+                }}
+              >
+                {petitionText ||
+                  "Your drafted petition will appear here after you click 'Generate Petition'."}
+              </pre>
+
+              {locked && petitionText && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "linear-gradient(to bottom, rgba(15,23,42,0), rgba(15,23,42,0.95))",
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+            </div>
+
+            {/* PETITION ACTIONS */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginTop: "4px",
+              }}
+            >
+              <button
+                onClick={handleCopyPetition}
+                disabled={locked || !petitionText}
+                style={{
+                  ...buttonSmall,
+                  opacity: locked || !petitionText ? 0.5 : 1,
+                }}
+              >
+                Copy Petition Text
+              </button>
+              <button
+                onClick={handleCopyEmails}
+                disabled={locked || !allEmails.length}
+                style={{
+                  ...buttonSmall,
+                  opacity: locked || !allEmails.length ? 0.5 : 1,
+                }}
+              >
+                Copy All Email Addresses
+              </button>
+              <button
+                onClick={handleOpenEmailClient}
+                disabled={locked || !petitionText || !allEmails.length}
+                style={{
+                  ...buttonSmall,
+                  opacity: locked || !petitionText || !allEmails.length ? 0.5 : 1,
+                }}
+              >
+                Open in Email App
+              </button>
+            </div>
+
+            {/* ROUTING SUMMARY */}
+            <div
+              style={{
+                marginTop: "8px",
+                paddingTop: "8px",
+                borderTop: "1px dashed #1f2937",
+                fontSize: "0.8rem",
+                color: "#9ca3af",
+              }}
+            >
+              <h3 style={{ fontSize: "0.9rem", marginBottom: "4px" }}>
+                4. Routing Summary
+              </h3>
+              {routing.primaryInstitution ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <div>
+                    <strong>Primary:</strong>{" "}
+                    {routing.primaryInstitution.org || "N/A"}
+                    {routing.primaryInstitution.email
+                      ? `  |  ${routing.primaryInstitution.email}`
+                      : ""}
+                  </div>
+                  {routing.throughInstitution && (
+                    <div>
+                      <strong>Through:</strong>{" "}
+                      {routing.throughInstitution.org || "N/A"}
+                      {routing.throughInstitution.email
+                        ? `  |  ${routing.throughInstitution.email}`
+                        : ""}
+                    </div>
+                  )}
+                  {routing.ccList && routing.ccList.length > 0 && (
+                    <div>
+                      <strong>CC:</strong>
+                      <ul style={{ margin: "4px 0 0 14px", padding: 0 }}>
+                        {routing.ccList.map((c, idx) => (
+                          <li key={idx} style={{ marginBottom: "2px" }}>
+                            {c.org}
+                            {c.email ? `  |  ${c.email}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {!routing.ccList?.length && <div>No CC institutions detected.</div>}
+                </div>
+              ) : (
+                <p>No routing yet. Generate a petition to see target institutions.</p>
+              )}
+            </div>
+          </section>
         </div>
-      )}
+
+        <footer
+          style={{
+            marginTop: "20px",
+            fontSize: "0.75rem",
+            textAlign: "center",
+            color: "#6b7280",
+          }}
+        >
+          Built for serious petitions. Always review before sending.
+        </footer>
+      </div>
     </div>
   );
 }
 
-// ----------------------------------
-// STYLES
-// ----------------------------------
-
+// Simple inline styles
 const inputStyle = {
   width: "100%",
-  padding: "12px",
-  marginBottom: "10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
+  padding: "8px 10px",
+  borderRadius: "8px",
+  border: "1px solid #1f2937",
+  background: "#020617",
+  color: "#e5e7eb",
+  fontSize: "0.85rem",
+  outline: "none",
 };
 
-const textareaStyle = {
+const buttonPrimary = {
   width: "100%",
-  padding: "12px",
-  height: "150px",
-  marginBottom: "10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-};
-
-const buttonStyle = {
-  width: "100%",
-  padding: "12px",
-  background: "#0b6623",
-  color: "white",
+  padding: "8px 12px",
+  borderRadius: "8px",
   border: "none",
-  borderRadius: "6px",
-  marginBottom: "10px",
-  fontSize: "16px",
+  background: "#16a34a",
+  color: "#f9fafb",
+  fontWeight: 600,
+  fontSize: "0.9rem",
+  cursor: "pointer",
 };
 
-const voiceButton = {
+const buttonSecondary = {
   width: "100%",
-  padding: "12px",
-  background: "#333",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  fontSize: "16px",
-  marginBottom: "10px",
+  padding: "8px 12px",
+  borderRadius: "8px",
+  border: "1px solid #fbbf24",
+  background: "#1f2937",
+  color: "#fbbf24",
+  fontWeight: 600,
+  fontSize: "0.9rem",
+  cursor: "pointer",
 };
 
-const resultBox = {
-  padding: "15px",
-  background: "#f1f8e9",
-  borderRadius: "6px",
-  border: "1px solid #c5e1a5",
-  marginTop: "10px",
-};
-
-const editBox = {
+const buttonGhost = {
   width: "100%",
-  height: "350px",
-  padding: "12px",
-  borderRadius: "6px",
-  border: "1px solid #ccc",
-  whiteSpace: "pre-wrap",
-  marginTop: "10px",
+  padding: "6px 10px",
+  borderRadius: "8px",
+  border: "1px dashed #4b5563",
+  background: "transparent",
+  color: "#9ca3af",
+  fontSize: "0.8rem",
+  cursor: "pointer",
 };
 
-const smallButton = {
-  padding: "10px 12px",
-  marginRight: "8px",
-  borderRadius: "6px",
-  border: "none",
-  background: "#2e7d32",
-  color: "white",
-  fontSize: "14px",
+const buttonSmall = {
+  padding: "6px 10px",
+  borderRadius: "999px",
+  border: "1px solid #4b5563",
+  background: "#020617",
+  color: "#e5e7eb",
+  fontSize: "0.8rem",
+  cursor: "pointer",
 };
+
+export default App;
