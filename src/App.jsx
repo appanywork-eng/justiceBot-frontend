@@ -1,3 +1,4 @@
+// App.jsx
 import { useState } from "react";
 import jsPDF from "jspdf";
 import { generatePetition } from "./api.js";
@@ -14,7 +15,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
   const [edited, setEdited] = useState("");
-
   const [meta, setMeta] = useState({
     recipientInstitution: null,
     primaryInstitution: null,
@@ -22,19 +22,23 @@ export default function App() {
     ccList: [],
   });
 
+  // ----------------------------------------------------
+  // FORM CHANGE
+  // ----------------------------------------------------
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   // VOICE TO TEXT
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   function startVoice() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       alert("Voice to text not supported on this device");
       return;
     }
+
     const recognition = new SR();
     recognition.lang = "en-NG";
 
@@ -50,9 +54,9 @@ export default function App() {
     recognition.start();
   }
 
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   // SUBMIT FORM – Petition Generation
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
       alert("Full name and complaint description are required.");
@@ -68,9 +72,11 @@ export default function App() {
       return;
     }
 
+    // Petition text
     setResult(response.petitionText);
     setEdited(response.petitionText);
 
+    // Institutions mapping
     const primary = response.primaryInstitution || null;
     const recipient = response.recipientInstitution || primary;
 
@@ -82,18 +88,21 @@ export default function App() {
     });
   }
 
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   // COPY PETITION
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   function copyText() {
-    if (!edited) return alert("Nothing to copy.");
+    if (!edited) {
+      alert("Nothing to copy.");
+      return;
+    }
     navigator.clipboard.writeText(edited);
     alert("Petition copied!");
   }
 
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   // EMAIL PETITION
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   function sendEmail() {
     if (!edited) {
       alert("Generate the petition first.");
@@ -127,16 +136,18 @@ export default function App() {
 
     let mailto = `mailto:${encodeURIComponent(
       to
-    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(edited)}`;
+    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
+      edited
+    )}`;
 
     if (cc) mailto += `&cc=${encodeURIComponent(cc)}`;
 
     window.location.href = mailto;
   }
 
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   // PDF DOWNLOAD
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   function downloadPDF() {
     if (!edited) return alert("Generate a petition first.");
 
@@ -149,9 +160,9 @@ export default function App() {
     doc.save("petition.pdf");
   }
 
-  // ---------------------------------------------------------
-  // PAYMENT – Flutterwave Integration
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
+  // PAYMENT – Flutterwave via Render backend
+  // ----------------------------------------------------
   async function handlePay() {
     if (!edited) {
       alert("Generate a petition first.");
@@ -160,32 +171,38 @@ export default function App() {
 
     try {
       const amount = 1000; // ₦1000 per petition
-
       const email = (form.email || "").trim() || "noemail@petitiondesk.com";
-      const name =
-        (form.fullName || "").trim() || "PetitionDesk User";
+      const fullName = (form.fullName || "").trim() || "PetitionDesk User";
 
-      const res = await fetch("/api/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount,
-          email,
-          name,
-          description: "PetitionDesk – AI petition payment",
-        }),
-      });
+      const res = await fetch(
+        "https://justicebot-backend-6pzy.onrender.com/pay",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount,
+            currency: "NGN",
+            fullName,
+            email,
+            description: edited.slice(0, 200),
+            publicKey: "FLWPUBK-3526f2ccb59b50a2d58582b7c566f6b8-X",
+          }),
+        }
+      );
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       const paymentLink =
-        data?.link || data?.paymentLink || data?.data?.link;
+        data.paymentLink ||
+        (data.data && data.data.link) ||
+        data.link ||
+        "";
 
       if (!res.ok || !paymentLink) {
-        console.error("Payment error:", data);
+        console.error("Payment init error:", data);
         alert(
-          data?.error ||
-            data?.message ||
+          data.error ||
+            data.message ||
             "Payment error. Please try again."
         );
         return;
@@ -198,9 +215,9 @@ export default function App() {
     }
   }
 
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   // STYLES
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   const inputStyle = {
     width: "100%",
     padding: "12px",
@@ -278,20 +295,20 @@ export default function App() {
   const smallButton = {
     padding: "10px 12px",
     marginRight: "8px",
-    borderRadius: "6px",
     border: "none",
+    borderRadius: "6px",
     background: "#2e7d32",
     color: "white",
     fontSize: "14px",
   };
 
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   // UI
-  // ---------------------------------------------------------
+  // ----------------------------------------------------
   return (
     <div style={{ padding: "15px", fontFamily: "Arial" }}>
       <h2 style={{ textAlign: "center", marginBottom: "12px" }}>
-        📝 PetitionDesk – AI Petition Writer
+        📑 PetitionDesk – AI Petition Writer
       </h2>
 
       {/* ROLE */}
@@ -345,7 +362,7 @@ export default function App() {
       </button>
 
       <button onClick={startVoice} style={voiceButton}>
-        🎤 Voice to Text
+        🎙️ Voice to Text
       </button>
 
       {/* RESULT */}
@@ -357,27 +374,21 @@ export default function App() {
           {meta.recipientInstitution && (
             <div style={institutionBox}>
               <p style={institutionLabel}>Recipient:</p>
-              <p style={institutionText}>
-                {meta.recipientInstitution.org}
-              </p>
+              <p style={institutionText}>{meta.recipientInstitution.org}</p>
             </div>
           )}
 
           {meta.primaryInstitution && (
             <div style={institutionBox}>
               <p style={institutionLabel}>Primary:</p>
-              <p style={institutionText}>
-                {meta.primaryInstitution.org}
-              </p>
+              <p style={institutionText}>{meta.primaryInstitution.org}</p>
             </div>
           )}
 
           {meta.throughInstitution && (
             <div style={institutionBox}>
               <p style={institutionLabel}>Through:</p>
-              <p style={institutionText}>
-                {meta.throughInstitution.org}
-              </p>
+              <p style={institutionText}>{meta.throughInstitution.org}</p>
             </div>
           )}
 
@@ -399,7 +410,13 @@ export default function App() {
             onChange={(e) => setEdited(e.target.value)}
           />
 
-          <div style={{ marginTop: "10px", display: "flex" }}>
+          <div
+            style={{
+              marginTop: "10px",
+              display: "flex",
+              flexWrap: "wrap",
+            }}
+          >
             <button onClick={copyText} style={smallButton}>
               Copy
             </button>
