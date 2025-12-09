@@ -12,8 +12,6 @@ export default function App() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [paying, setPaying] = useState(false);
-
   const [result, setResult] = useState("");
   const [edited, setEdited] = useState("");
 
@@ -24,19 +22,15 @@ export default function App() {
     ccList: [],
   });
 
-  // ------------------------------------------------------------
-  // FORM HANDLERS
-  // ------------------------------------------------------------
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
   // VOICE TO TEXT
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
   function startVoice() {
-    const SR =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       alert("Voice to text not supported on this device");
       return;
@@ -52,12 +46,13 @@ export default function App() {
           : event.results[0][0].transcript,
       }));
     };
+
     recognition.start();
   }
 
-  // ------------------------------------------------------------
-  // SUBMIT FORM (A8 / A11 Compatible)
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
+  // SUBMIT FORM – Petition Generation
+  // ---------------------------------------------------------
   async function submitForm() {
     if (!form.fullName || !form.description) {
       alert("Full name and complaint description are required.");
@@ -73,11 +68,9 @@ export default function App() {
       return;
     }
 
-    // Petition text
     setResult(response.petitionText);
     setEdited(response.petitionText);
 
-    // Frontend mapping fix
     const primary = response.primaryInstitution || null;
     const recipient = response.recipientInstitution || primary;
 
@@ -89,18 +82,18 @@ export default function App() {
     });
   }
 
-  // ------------------------------------------------------------
-  // COPY
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
+  // COPY PETITION
+  // ---------------------------------------------------------
   function copyText() {
     if (!edited) return alert("Nothing to copy.");
     navigator.clipboard.writeText(edited);
     alert("Petition copied!");
   }
 
-  // ------------------------------------------------------------
-  // EMAIL
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
+  // EMAIL PETITION
+  // ---------------------------------------------------------
   function sendEmail() {
     if (!edited) {
       alert("Generate the petition first.");
@@ -126,29 +119,24 @@ export default function App() {
     const to = unique[0] || "";
     const cc = unique.slice(1).join(",");
 
-    // Extract RE/Subject from petition if present
     let subject = `Petition from ${form.fullName}`;
     const found = edited
       .split("\n")
       .find((l) => l.trim().toUpperCase().startsWith("RE:"));
-    if (found)
-      subject = found.replace(/^RE:\s*/i, "").trim() || subject;
-
-    const body = edited;
+    if (found) subject = found.replace(/^RE:\s*/i, "").trim();
 
     let mailto = `mailto:${encodeURIComponent(
       to
-    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-      body
-    )}`;
+    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(edited)}`;
+
     if (cc) mailto += `&cc=${encodeURIComponent(cc)}`;
 
     window.location.href = mailto;
   }
 
-  // ------------------------------------------------------------
-  // PDF
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
+  // PDF DOWNLOAD
+  // ---------------------------------------------------------
   function downloadPDF() {
     if (!edited) return alert("Generate a petition first.");
 
@@ -161,54 +149,58 @@ export default function App() {
     doc.save("petition.pdf");
   }
 
-  // ------------------------------------------------------------
-  // PAY – Calls backend /pay (Flutterwave)
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
+  // PAYMENT – Flutterwave Integration
+  // ---------------------------------------------------------
   async function handlePay() {
     if (!edited) {
-      alert("Generate the petition first.");
+      alert("Generate a petition first.");
       return;
     }
 
     try {
-      setPaying(true);
+      const amount = 1000; // ₦1000 per petition
 
-      const res = await fetch("/pay", {
+      const email = (form.email || "").trim() || "noemail@petitiondesk.com";
+      const name =
+        (form.fullName || "").trim() || "PetitionDesk User";
+
+      const res = await fetch("/api/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: 1500, // NGN – change later if you want tiers
-          currency: "NGN",
-          fullName: form.fullName || "PetitionDesk User",
-          email: form.email || "no-email@petitiondesk.com",
-          description: form.description,
+          amount,
+          email,
+          name,
+          description: "PetitionDesk – AI petition payment",
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
 
-      if (!res.ok || !data.paymentLink) {
-        console.error("Payment init failed:", data);
+      const paymentLink =
+        data?.link || data?.paymentLink || data?.data?.link;
+
+      if (!res.ok || !paymentLink) {
+        console.error("Payment error:", data);
         alert(
-          data.error ||
-            "Unable to start payment. Please try again later."
+          data?.error ||
+            data?.message ||
+            "Payment error. Please try again."
         );
-        setPaying(false);
         return;
       }
 
-      // Redirect user to Flutterwave hosted payment page
-      window.location.href = data.paymentLink;
+      window.location.href = paymentLink;
     } catch (err) {
       console.error("Payment error:", err);
       alert("Payment error. Please try again.");
-      setPaying(false);
     }
   }
 
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
   // STYLES
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
   const inputStyle = {
     width: "100%",
     padding: "12px",
@@ -220,8 +212,8 @@ export default function App() {
   const textareaStyle = {
     width: "100%",
     padding: "12px",
-    marginBottom: "10px",
     height: "150px",
+    marginBottom: "10px",
     border: "1px solid #ccc",
     borderRadius: "6px",
   };
@@ -245,7 +237,7 @@ export default function App() {
     border: "none",
     borderRadius: "6px",
     fontSize: "16px",
-    marginBottom: "15px",
+    marginBottom: "10px",
   };
 
   const resultBox = {
@@ -286,16 +278,16 @@ export default function App() {
   const smallButton = {
     padding: "10px 12px",
     marginRight: "8px",
-    border: "none",
     borderRadius: "6px",
+    border: "none",
     background: "#2e7d32",
     color: "white",
     fontSize: "14px",
   };
 
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
   // UI
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
   return (
     <div style={{ padding: "15px", fontFamily: "Arial" }}>
       <h2 style={{ textAlign: "center", marginBottom: "12px" }}>
@@ -353,7 +345,7 @@ export default function App() {
       </button>
 
       <button onClick={startVoice} style={voiceButton}>
-        🎙️ Voice to Text
+        🎤 Voice to Text
       </button>
 
       {/* RESULT */}
@@ -362,45 +354,43 @@ export default function App() {
           <h3>Generated Petition</h3>
 
           {/* Institutions */}
-          <div style={institutionBox}>
-            {meta.recipientInstitution && (
-              <>
-                <p style={institutionLabel}>Recipient:</p>
-                <p style={institutionText}>
-                  {meta.recipientInstitution.org}
-                </p>
-              </>
-            )}
+          {meta.recipientInstitution && (
+            <div style={institutionBox}>
+              <p style={institutionLabel}>Recipient:</p>
+              <p style={institutionText}>
+                {meta.recipientInstitution.org}
+              </p>
+            </div>
+          )}
 
-            {meta.primaryInstitution && (
-              <>
-                <p style={institutionLabel}>Primary:</p>
-                <p style={institutionText}>
-                  {meta.primaryInstitution.org}
-                </p>
-              </>
-            )}
+          {meta.primaryInstitution && (
+            <div style={institutionBox}>
+              <p style={institutionLabel}>Primary:</p>
+              <p style={institutionText}>
+                {meta.primaryInstitution.org}
+              </p>
+            </div>
+          )}
 
-            {meta.throughInstitution && (
-              <>
-                <p style={institutionLabel}>Through:</p>
-                <p style={institutionText}>
-                  {meta.throughInstitution.org}
-                </p>
-              </>
-            )}
+          {meta.throughInstitution && (
+            <div style={institutionBox}>
+              <p style={institutionLabel}>Through:</p>
+              <p style={institutionText}>
+                {meta.throughInstitution.org}
+              </p>
+            </div>
+          )}
 
-            {meta.ccList.length > 0 && (
-              <>
-                <p style={institutionLabel}>CC:</p>
-                <ul>
-                  {meta.ccList.map((i, idx) => (
-                    <li key={idx}>{i.org}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
+          {meta.ccList.length > 0 && (
+            <div style={institutionBox}>
+              <p style={institutionLabel}>CC:</p>
+              <ul>
+                {meta.ccList.map((i, idx) => (
+                  <li key={idx}>{i.org}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Editable petition */}
           <textarea
@@ -409,9 +399,7 @@ export default function App() {
             onChange={(e) => setEdited(e.target.value)}
           />
 
-          <div
-            style={{ marginTop: "10px", display: "flex", flexWrap: "wrap" }}
-          >
+          <div style={{ marginTop: "10px", display: "flex" }}>
             <button onClick={copyText} style={smallButton}>
               Copy
             </button>
@@ -424,12 +412,8 @@ export default function App() {
               PDF
             </button>
 
-            <button
-              onClick={handlePay}
-              style={smallButton}
-              disabled={paying}
-            >
-              {paying ? "Redirecting..." : "Pay"}
+            <button onClick={handlePay} style={smallButton}>
+              Pay
             </button>
           </div>
         </div>
