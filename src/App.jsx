@@ -221,7 +221,7 @@ function App() {
   };
 
   // ----------------------------------------------------
-  // Voice to Text (90s, en-NG, better handling)
+  // Voice to Text (90s, en-NG)
   // ----------------------------------------------------
   const handleMicClick = () => {
     // Stop recording if already active
@@ -291,11 +291,11 @@ function App() {
   };
 
   // ----------------------------------------------------
-  // Styles (Option A – clean professional)
+  // SIMPLE UI STYLES (Option A – plain + clean)
   // ----------------------------------------------------
   const pageStyle = {
     minHeight: "100vh",
-    background: "linear-gradient(to bottom, #ffffff, #ecfdf3)",
+    backgroundColor: "#ffffff",
     padding: "16px",
     fontFamily:
       "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -303,20 +303,23 @@ function App() {
 
   const cardStyle = {
     background: "#ffffff",
-    borderRadius: "16px",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-    padding: "16px",
-    maxWidth: "1200px",
-    margin: "0 auto",
+    borderRadius: "8px",
     border: "1px solid #e5e7eb",
+    padding: "16px",
+    maxWidth: "960px",
+    margin: "0 auto",
   };
 
-  const labelStyle = { fontSize: "0.85rem", fontWeight: 600, marginBottom: 4 };
+  const labelStyle = {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    marginBottom: 4,
+  };
 
   const inputStyle = {
     width: "100%",
     padding: "8px 10px",
-    borderRadius: "8px",
+    borderRadius: "6px",
     border: "1px solid #d1d5db",
     fontSize: "0.9rem",
     outline: "none",
@@ -332,28 +335,22 @@ function App() {
     backgroundColor: "#047857",
     color: "#ffffff",
     border: "none",
-    borderRadius: "999px",
-    padding: "10px 18px",
+    borderRadius: "4px",
+    padding: "10px 16px",
     fontSize: "0.9rem",
     fontWeight: 600,
     cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
   };
 
   const buttonSecondary = {
     backgroundColor: "#ffffff",
     color: "#047857",
     border: "1px solid #047857",
-    borderRadius: "999px",
+    borderRadius: "4px",
     padding: "8px 14px",
     fontSize: "0.85rem",
     fontWeight: 500,
     cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
   };
 
   const disabledBtn = {
@@ -362,16 +359,15 @@ function App() {
   };
 
   const micButtonStyle = {
-    backgroundColor: isRecording ? "#b91c1c" : "#047857",
+    backgroundColor: isRecording ? "#b91c1c" : "#111827",
     color: "#fff",
-    borderRadius: "999px",
+    borderRadius: "4px",
     border: "none",
     padding: "8px 10px",
     fontSize: "0.8rem",
     cursor: "pointer",
   };
 
-  // Buttons disabled if no result OR not paid
   const toolsDisabled = !hasResult || !paymentUnlocked;
 
   return (
@@ -389,25 +385,29 @@ function App() {
           >
             PetitionDesk.com
           </h1>
-          <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: 12 }}>
-            AI-powered petition writer for{" "}
-            <strong>banks, police, telecoms, government, human rights</strong>{" "}
-            and more.
+          <p
+            style={{
+              fontSize: "0.95rem",
+              color: "#111827",
+              marginBottom: 10,
+            }}
+          >
+            AI No.1 petition writer for complaints and redress.
           </p>
 
           {/* Top disclaimer – always visible */}
           <div
             style={{
               background: "#fefce8",
-              borderRadius: 12,
+              borderRadius: 6,
               padding: 10,
               border: "1px solid #facc15",
-              marginBottom: 8,
+              marginBottom: 4,
             }}
           >
             <p
               style={{
-                fontSize: "0.75rem",
+                fontSize: "0.8rem",
                 color: "#854d0e",
                 lineHeight: 1.4,
               }}
@@ -422,26 +422,6 @@ function App() {
               complex or urgent matters, please consult a qualified lawyer.
             </p>
           </div>
-
-          {/* Static banner */}
-          <div
-            style={{
-              background: "#ecfdf3",
-              borderRadius: "999px",
-              padding: "8px 14px",
-              border: "1px solid #bbf7d0",
-              fontSize: "0.8rem",
-              color: "#065f46",
-              maxWidth: 460,
-            }}
-          >
-            ✉️{" "}
-            <strong>
-              Write SAN-grade petitions and send them directly by email for just
-              ₦1,000–₦1,500 per petition
-            </strong>{" "}
-            (amount depends on your country / location).
-          </div>
         </header>
 
         {/* BODY LAYOUT */}
@@ -449,21 +429,13 @@ function App() {
           style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)",
-            gap: 20,
+            gap: 16,
           }}
         >
           {/* LEFT: FORM + PAYMENT */}
           <div>
             {/* Complainant details */}
-            <section
-              style={{
-                background: "#f9fafb",
-                borderRadius: 12,
-                padding: 14,
-                marginBottom: 12,
-                border: "1px solid #e5e7eb",
-              }}
-            >
+            <section style={{ marginBottom: 10 }}>
               <h2
                 style={{
                   fontSize: "0.95rem",
@@ -524,14 +496,7 @@ function App() {
             </section>
 
             {/* Complaint description + mic */}
-            <section
-              style={{
-                background: "#f9fafb",
-                borderRadius: 12,
-                padding: 14,
-                border: "1px solid #e5e7eb",
-              }}
-            >
+            <section>
               <h2
                 style={{
                   fontSize: "0.95rem",
@@ -542,21 +507,11 @@ function App() {
               >
                 Describe your complaint
               </h2>
-              <p
-                style={{
-                  fontSize: "0.8rem",
-                  color: "#4b5563",
-                  marginBottom: 6,
-                }}
-              >
-                Explain what happened, where, when, who is involved, and what
-                you want. The more facts you give, the stronger your petition.
-              </p>
               <textarea
                 style={textareaStyle}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Example: On 7 December 2025, officers attached to XYZ Division in Kubwa unlawfully arrested me..."
+                placeholder="Explain what happened, where, when, who is involved, and what you want."
               />
 
               <div
@@ -565,11 +520,11 @@ function App() {
                   justifyContent: "space-between",
                   marginTop: 10,
                   alignItems: "center",
-                  gap: 12,
+                  gap: 8,
                   flexWrap: "wrap",
                 }}
               >
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={handleGenerate}
                     style={{
@@ -586,7 +541,7 @@ function App() {
                     style={micButtonStyle}
                     onClick={handleMicClick}
                   >
-                    {isRecording ? "Stop recording" : "Speak (voice to text)"}
+                    {isRecording ? "Stop recording" : "Voice to text"}
                   </button>
                 </div>
 
@@ -601,15 +556,7 @@ function App() {
             </section>
 
             {/* PAYMENT SECTION */}
-            <section
-              style={{
-                marginTop: 12,
-                background: "#ecfdf5",
-                borderRadius: 12,
-                padding: 12,
-                border: "1px solid #bbf7d0",
-              }}
-            >
+            <section style={{ marginTop: 12 }}>
               <h3
                 style={{
                   fontSize: "0.9rem",
@@ -620,19 +567,6 @@ function App() {
               >
                 Payment (unlock full petition tools)
               </h3>
-              <p
-                style={{
-                  fontSize: "0.8rem",
-                  color: "#065f46",
-                  marginBottom: 6,
-                }}
-              >
-                Pay once per petition to support the platform and help us keep
-                improving access to justice. Most Nigerian users pay{" "}
-                <strong>around ₦1,000</strong>; users in other countries
-                typically pay <strong>around ₦1,500</strong>. You can set the
-                exact amount below.
-              </p>
 
               <div
                 style={{
@@ -669,10 +603,8 @@ function App() {
               </div>
 
               <p style={{ fontSize: "0.75rem", color: "#4b5563" }}>
-                ✅ You can still review and edit your petition text here. <br />
-                💡 After payment is completed and you return to PetitionDesk,
-                the <strong>Copy</strong>, <strong>Download</strong> and{" "}
-                <strong>Email</strong> tools will be unlocked for this petition.
+                Pay once per petition to support the platform and unlock copy,
+                download and email tools.
               </p>
             </section>
           </div>
@@ -680,23 +612,14 @@ function App() {
           {/* RIGHT: Petition + routing */}
           <div>
             {/* Generated petition */}
-            <section
-              style={{
-                background: "#f9fafb",
-                borderRadius: 12,
-                padding: 14,
-                border: "1px solid #e5e7eb",
-                marginBottom: 12,
-                minHeight: 220,
-              }}
-            >
+            <section style={{ marginBottom: 10 }}>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: 8,
-                  gap: 8,
+                  marginBottom: 6,
+                  gap: 6,
                   flexWrap: "wrap",
                 }}
               >
@@ -725,7 +648,7 @@ function App() {
                     disabled={toolsDisabled}
                     onClick={handleCopy}
                   >
-                    📋 Copy
+                    Copy
                   </button>
                   <button
                     style={{
@@ -735,7 +658,7 @@ function App() {
                     disabled={toolsDisabled}
                     onClick={handleEmail}
                   >
-                    ✉️ Email
+                    Email
                   </button>
                   <button
                     style={{
@@ -745,15 +668,15 @@ function App() {
                     disabled={toolsDisabled}
                     onClick={handleDownload}
                   >
-                    ⬇️ Download
+                    Download
                   </button>
                 </div>
               </div>
 
               <div
                 style={{
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
+                  borderRadius: 4,
+                  border: "1px solid #d1d5db",
                   background: "#ffffff",
                   padding: 10,
                   fontSize: "0.85rem",
@@ -762,28 +685,23 @@ function App() {
                   minHeight: 140,
                   maxHeight: 360,
                   overflow: "auto",
+                  // Prevent manual text selection until payment is unlocked
+                  userSelect: paymentUnlocked ? "text" : "none",
                 }}
               >
                 {hasResult ? (
                   petitionText
                 ) : (
                   <span style={{ color: "#9ca3af" }}>
-                    Your SAN-grade petition will appear here after you click{" "}
-                    <strong>“Generate Petition”</strong>.
+                    Your professional-grade petition will appear here after you
+                    click <strong>“Generate Petition”</strong>.
                   </span>
                 )}
               </div>
             </section>
 
             {/* Routing summary */}
-            <section
-              style={{
-                background: "#f9fafb",
-                borderRadius: 12,
-                padding: 12,
-                border: "1px solid #e5e7eb",
-              }}
-            >
+            <section>
               <h3
                 style={{
                   fontSize: "0.9rem",
@@ -874,11 +792,11 @@ function App() {
               border: "1px solid #bbf7d0",
             }}
           >
-            ✉️ Write SAN-grade petitions and send them directly by email to
-            the right institutions for just ₦1,000–₦1,500 per petition (amount
-            depends on your country / location). PetitionDesk routes your
-            petition to the proper authorities and watchdogs – PCC, NHRC and
-            others – to make sure your voice is heard.
+            ✉️ Write professional-grade petitions and send them directly by
+            email to the right institutions for just ₦1,000–₦1,500 per petition
+            (amount depends on your country / location). PetitionDesk routes
+            your petition to the proper authorities and watchdogs – PCC, NHRC
+            and others – so your complaint is taken seriously.
           </marquee>
         </div>
       </div>
