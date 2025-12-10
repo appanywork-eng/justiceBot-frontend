@@ -33,10 +33,12 @@ function App() {
         const status = (url.searchParams.get("status") || "").toLowerCase();
         if (!status || status === "successful" || status === "completed") {
           setPaymentUnlocked(true);
-          alert("Payment confirmed. Full tools unlocked.");
+          alert("Payment confirmed. Full tools unlocked for this session.");
         }
       }
-    } catch (err) {}
+    } catch (err) {
+      // ignore
+    }
   }, []);
 
   const handleGenerate = async () => {
@@ -83,7 +85,7 @@ function App() {
 
   const assertPaid = () => {
     if (!paymentUnlocked) {
-      alert("Please pay to unlock these tools.");
+      alert("Please pay to unlock Copy, Email and Download tools.");
       return false;
     }
     return true;
@@ -91,24 +93,40 @@ function App() {
 
   const handleCopy = async () => {
     if (!assertPaid()) return;
+    if (!petitionText) return;
     try {
       await navigator.clipboard.writeText(petitionText);
-      alert("Copied.");
-    } catch {}
+      alert("Petition copied.");
+    } catch {
+      alert("Unable to copy automatically. Please copy manually.");
+    }
   };
 
   const handleEmail = () => {
     if (!assertPaid()) return;
+    if (!petitionText) return;
+
     const emails = new Set();
     const add = (x) => {
       if (!x || !x.email) return;
-      x.email.split(/[,;]/).map((e) => e.trim()).forEach((e) => emails.add(e));
+      x.email
+        .split(/[,;]/)
+        .map((e) => e.trim())
+        .filter(Boolean)
+        .forEach((e) => emails.add(e));
     };
     add(primaryInstitution);
     add(throughInstitution);
     ccList.forEach(add);
 
     const to = [...emails].join(",");
+    if (!to) {
+      alert(
+        "No official email addresses were detected. You can still copy this petition and paste it into your own email."
+      );
+      return;
+    }
+
     const subject = encodeURIComponent("Formal Petition");
     const body = encodeURIComponent(petitionText);
 
@@ -117,7 +135,9 @@ function App() {
 
   const handleDownload = () => {
     if (!assertPaid()) return;
-    const blob = new Blob([petitionText], { type: "text/plain" });
+    if (!petitionText) return;
+
+    const blob = new Blob([petitionText], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -127,10 +147,18 @@ function App() {
   };
 
   const handlePay = async () => {
+    setError("");
+
     if (!email || !fullName) {
-      setError("Enter your name & email before payment.");
+      setError("Enter your full name and email before payment.");
       return;
     }
+
+    if (!amount || amount < 1000) {
+      setError("Minimum petition fee is ₦1000. Please enter ₦1000 or above.");
+      return;
+    }
+
     setPayLoading(true);
     try {
       const res = await fetch(`${API_BASE}/pay`, {
@@ -141,12 +169,16 @@ function App() {
           currency: "NGN",
           fullName,
           email,
-          description: description || "PetitionDesk payment",
+          description: description || "PetitionDesk – Petition drafting fee",
         }),
       });
       const data = await res.json();
-      if (data.paymentLink) window.location.href = data.paymentLink;
-      else setError("Payment failed.");
+
+      if (data.ok === false || !data.paymentLink) {
+        setError(data.error || "Payment failed.");
+      } else {
+        window.location.href = data.paymentLink;
+      }
     } catch {
       setError("Payment error.");
     } finally {
@@ -186,6 +218,10 @@ function App() {
       const combined = (finalTranscript || interim).trim();
       if (combined)
         setDescription((prev) => (prev ? prev + "\n" + combined : combined));
+    };
+
+    recog.onerror = () => {
+      setIsRecording(false);
     };
 
     recog.onend = () => setIsRecording(false);
@@ -242,7 +278,7 @@ function App() {
 
   return (
     <div style={layoutStyle}>
-      {/* TOP SCROLLING DISCLAIMER */}
+      {/* TOP SCROLLING DISCLAIMER – slow speed (Option A) */}
       <marquee
         style={{
           background: "#fff8e1",
@@ -251,10 +287,12 @@ function App() {
           marginBottom: 10,
           fontSize: "0.85rem",
         }}
+        scrollAmount="3"
       >
         Disclaimer: PetitionDesk.com is not a law firm and does not provide
-        legal advice. It is an AI-powered drafting tool. Always review your
-        petition before sending.
+        legal advice. It is an AI-powered drafting tool for professional-grade
+        petitions. Always review your petition before sending and consult a
+        lawyer for complex or urgent matters.
       </marquee>
 
       {/* TITLE */}
@@ -307,13 +345,17 @@ function App() {
         </button>
 
         <button
-          style={{ ...thinBtn, background: isRecording ? "#b91c1c" : "#065f46" }}
+          style={{
+            ...thinBtn,
+            background: isRecording ? "#b91c1c" : "#065f46",
+            marginLeft: 4,
+          }}
           onClick={handleMicClick}
         >
           {isRecording ? "Stop Recording" : "Voice to Text"}
         </button>
 
-        {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && <p style={{ color: "red", marginTop: 8 }}>{error}</p>}
       </div>
 
       {/* BOX 2 – ONLY SHOW AFTER GENERATION */}
@@ -374,10 +416,15 @@ function App() {
           {/* PAYMENT */}
           <div style={{ marginTop: 16 }}>
             <h4>Unlock tools</h4>
+            <p style={{ fontSize: "0.85rem", marginBottom: 6 }}>
+              Minimum petition fee is <strong>₦1000</strong>. Users are
+              responsible for any bank or payment gateway charges added by their
+              provider.
+            </p>
             <input
               type="number"
-              style={{ ...input, width: 120 }}
-              min={500}
+              style={{ ...input, width: 140 }}
+              min={1000}
               value={amount}
               onChange={(e) => setAmount(Number(e.target.value))}
             />
@@ -414,7 +461,7 @@ function App() {
         </div>
       )}
 
-      {/* BOTTOM MOVING TEXT */}
+      {/* BOTTOM MOVING TEXT – slow ticker */}
       <marquee
         style={{
           marginTop: 20,
@@ -423,9 +470,12 @@ function App() {
           color: "#065f46",
           fontSize: "0.85rem",
         }}
+        scrollAmount="3"
       >
         Write professional-grade petitions and send them directly by email for
-        ₦1,000 – ₦1,500 depending on your location.
+        ₦1,000 – ₦1,500 depending on your location. PetitionDesk routes your
+        complaint to the right institutions and watchdogs so your voice is
+        heard.
       </marquee>
     </div>
   );
