@@ -1,143 +1,63 @@
-import React, { useState, useRef, useEffect } from "react";
+// src/App.jsx
+import React, { useState, useEffect, useRef } from "react";
 
-const API_BASE = "https://justicebot-backend-6pzy.onrender.com"; // your Render backend
+const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
 function App() {
+  // --- form fields ---
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
 
+  // --- petition + routing ---
   const [petitionText, setPetitionText] = useState("");
   const [primaryInstitution, setPrimaryInstitution] = useState(null);
   const [throughInstitution, setThroughInstitution] = useState(null);
   const [ccList, setCcList] = useState([]);
 
+  // --- UI state ---
   const [loading, setLoading] = useState(false);
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState("");
-  const [amount, setAmount] = useState(1000); // default ₦1000 – user can change to 1500, etc.
+  const [amount, setAmount] = useState(1000);
+  const [isMobileLayout, setIsMobileLayout] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 900 : true
+  );
 
   const hasResult = !!petitionText;
 
-  // -----------------------
-  // Voice to text state
-  // -----------------------
+  // --- voice-to-text state ---
   const [isRecording, setIsRecording] = useState(false);
-  const recognitionRef = useRef(null);
-  const recordTimeoutRef = useRef(null);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const recordTimerRef = useRef(null);
 
-  // Clean up on unmount
+  // --- responsive layout ---
   useEffect(() => {
+    const handleResize = () => {
+      if (typeof window === "undefined") return;
+      setIsMobileLayout(window.innerWidth < 900);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", handleResize);
+    }
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      if (recordTimeoutRef.current) {
-        clearTimeout(recordTimeoutRef.current);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("resize", handleResize);
       }
     };
   }, []);
 
-  const startVoiceRecording = () => {
-    if (typeof window === "undefined") {
-      alert("Voice recording is not supported in this environment. Please type your complaint.");
-      return;
-    }
-
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert(
-        "Voice-to-text is not supported on this browser. Please type your complaint manually."
-      );
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-NG"; // English (Nigeria)
-    recognition.continuous = true;
-    recognition.interimResults = false; // only final results to avoid duplicates
-
-    recognitionRef.current = recognition;
-
-    recognition.onresult = (event) => {
-      let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-
-      const cleaned = transcript.trim();
-      if (!cleaned) return;
-
-      setDescription((prev) => {
-        const base = prev ? prev.trim() + " " : "";
-        return (base + cleaned).trim();
-      });
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event);
-      setIsRecording(false);
-      recognitionRef.current = null;
-      if (recordTimeoutRef.current) {
-        clearTimeout(recordTimeoutRef.current);
-      }
-      alert("There was an error with voice recognition. Please try again or type your complaint.");
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-      recognitionRef.current = null;
-      if (recordTimeoutRef.current) {
-        clearTimeout(recordTimeoutRef.current);
-      }
-    };
-
-    recognition.start();
-    setIsRecording(true);
-
-    // Stop automatically after 90 seconds
-    recordTimeoutRef.current = window.setTimeout(() => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    }, 90_000); // 90 seconds
-  };
-
-  const stopVoiceRecording = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-  };
-
-  const handleVoiceButtonClick = () => {
-    if (isRecording) {
-      // User taps again to stop
-      stopVoiceRecording();
-      return;
-    }
-
-    const ok = window.confirm(
-      "Use your microphone to dictate your complaint (maximum 1 minute 30 seconds).\n\nMake sure you are in a quiet place and speak clearly.\n\nDo you want to start recording now?"
-    );
-    if (!ok) return;
-
-    startVoiceRecording();
-  };
-
-  // -----------------------
-  // Existing logic
-  // -----------------------
-
+  // ----------------- PETITION GENERATION -----------------
   const handleGenerate = async () => {
     setError("");
     setPetitionText("");
     setPrimaryInstitution(null);
     setThroughInstitution(null);
     setCcList([]);
+
     if (!description.trim()) {
       setError("Please describe your complaint in detail.");
       return;
@@ -177,6 +97,7 @@ function App() {
     }
   };
 
+  // ----------------- COPY / EMAIL / DOWNLOAD -----------------
   const handleCopy = async () => {
     if (!petitionText) return;
     try {
@@ -191,7 +112,6 @@ function App() {
   const handleEmail = () => {
     if (!petitionText) return;
 
-    // Build mailto with all known emails (primary + through + CC)
     const emails = new Set();
 
     const addEmail = (obj) => {
@@ -217,7 +137,9 @@ function App() {
 
   const handleDownload = () => {
     if (!petitionText) return;
-    const blob = new Blob([petitionText], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([petitionText], {
+      type: "text/plain;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -228,6 +150,7 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  // ----------------- PAYMENT -----------------
   const handlePay = async () => {
     setError("");
     if (!email || !fullName) {
@@ -263,7 +186,6 @@ function App() {
         return;
       }
 
-      // Redirect to Flutterwave checkout
       window.location.href = data.paymentLink;
     } catch (err) {
       console.error(err);
@@ -273,11 +195,116 @@ function App() {
     }
   };
 
-  // --- simple styles (green & white, clean) ---
+  // ----------------- VOICE TO TEXT (UNLIMITED) -----------------
+  const uploadAudio = async (blob) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", blob, "speech.webm");
+
+      const res = await fetch(`${API_BASE}/speech`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Speech error:", data);
+        alert(
+          data?.error ||
+            "Unable to transcribe audio. Please try again or type manually."
+        );
+        return;
+      }
+
+      const text = data.text || "";
+      if (text.trim()) {
+        setDescription((prev) =>
+          prev ? `${prev.trim()}\n\n${text.trim()}` : text.trim()
+        );
+      }
+    } catch (err) {
+      console.error("Speech network error:", err);
+      alert("Network error while sending audio. Please try again.");
+    }
+  };
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Your device does not support microphone recording.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm",
+      });
+
+      const chunks = [];
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+        clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
+        setRecordSeconds(0);
+
+        if (chunks.length === 0) return;
+
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        await uploadAudio(blob);
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(); // unlimited until stop
+      setIsRecording(true);
+      setRecordSeconds(0);
+
+      recordTimerRef.current = setInterval(() => {
+        setRecordSeconds((s) => s + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      alert(
+        "Unable to access your microphone. Please check permissions and try again."
+      );
+    }
+  };
+
+  const stopRecording = () => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      mr.stop();
+    }
+  };
+
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const formatSeconds = (secs) => {
+    const m = Math.floor(secs / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  // ----------------- STYLES -----------------
   const pageStyle = {
     minHeight: "100vh",
     background: "linear-gradient(to bottom, #ffffff, #ecfdf3)",
-    padding: "20px",
+    padding: "16px",
     fontFamily:
       "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   };
@@ -286,13 +313,17 @@ function App() {
     background: "#ffffff",
     borderRadius: "16px",
     boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-    padding: "20px",
+    padding: isMobileLayout ? "16px" : "20px",
     maxWidth: "1200px",
     margin: "0 auto",
     border: "1px solid #e5e7eb",
   };
 
-  const labelStyle = { fontSize: "0.85rem", fontWeight: 600, marginBottom: 4 };
+  const labelStyle = {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    marginBottom: 4,
+  };
 
   const inputStyle = {
     width: "100%",
@@ -342,38 +373,24 @@ function App() {
     cursor: "not-allowed",
   };
 
-  // Mic button style (round)
-  const micButtonStyle = {
-    width: 36,
-    height: 36,
-    borderRadius: "999px",
-    border: "1px solid #047857",
-    backgroundColor: isRecording ? "#047857" : "#ffffff",
-    color: isRecording ? "#ffffff" : "#047857",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    fontSize: "1.1rem",
-  };
-
+  // ----------------- RENDER -----------------
   return (
     <div style={pageStyle}>
       <div style={cardStyle}>
         {/* HEADER */}
-        <header style={{ marginBottom: 20 }}>
+        <header style={{ marginBottom: 16 }}>
           <div
             style={{
               display: "flex",
+              flexDirection: isMobileLayout ? "column" : "row",
               justifyContent: "space-between",
               gap: 12,
-              flexWrap: "wrap",
             }}
           >
             <div>
               <h1
                 style={{
-                  fontSize: "1.5rem",
+                  fontSize: isMobileLayout ? "1.5rem" : "1.8rem",
                   fontWeight: 800,
                   color: "#065f46",
                 }}
@@ -394,7 +411,6 @@ function App() {
               </p>
             </div>
 
-            {/* moving pricing banner (simple, non-animated) */}
             <div
               style={{
                 background: "#ecfdf3",
@@ -403,7 +419,7 @@ function App() {
                 border: "1px solid #bbf7d0",
                 fontSize: "0.8rem",
                 color: "#065f46",
-                maxWidth: 360,
+                maxWidth: isMobileLayout ? "100%" : 380,
               }}
             >
               ✉️{" "}
@@ -420,18 +436,21 @@ function App() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)",
-            gap: 24,
+            gridTemplateColumns: isMobileLayout
+              ? "minmax(0, 1fr)"
+              : "minmax(0, 1.1fr) minmax(0, 1fr)",
+            gap: 16,
           }}
         >
-          {/* LEFT: FORM */}
+          {/* LEFT COLUMN */}
           <div>
+            {/* Complainant */}
             <section
               style={{
                 background: "#f9fafb",
                 borderRadius: 12,
                 padding: 14,
-                marginBottom: 16,
+                marginBottom: 12,
                 border: "1px solid #e5e7eb",
               }}
             >
@@ -494,6 +513,7 @@ function App() {
               </div>
             </section>
 
+            {/* Complaint + Voice */}
             <section
               style={{
                 background: "#f9fafb",
@@ -526,7 +546,7 @@ function App() {
                 style={textareaStyle}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Example: On 7 December 2025, officers attached to XYZ Division in Kubwa unlawfully arrested me..."
+                placeholder="Example: On 7 December 2025, officers attached to XYZ Division unlawfully arrested me at..."
               />
 
               <div
@@ -539,58 +559,61 @@ function App() {
                   flexWrap: "wrap",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <button
-                    onClick={handleGenerate}
+                <button
+                  onClick={handleGenerate}
+                  style={{
+                    ...buttonPrimary,
+                    ...(loading ? disabledBtn : {}),
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? "Generating..." : "Generate Petition"}
+                </button>
+
+                {/* Voice recorder pill */}
+                <button
+                  type="button"
+                  onClick={handleToggleRecording}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    borderRadius: "999px",
+                    border: isRecording
+                      ? "1px solid #b91c1c"
+                      : "1px solid #9ca3af",
+                    backgroundColor: isRecording ? "#fee2e2" : "#ffffff",
+                    padding: "6px 10px",
+                    fontSize: "0.8rem",
+                    color: "#111827",
+                  }}
+                >
+                  <span role="img" aria-label="mic">
+                    🎙️
+                  </span>
+                  {isRecording
+                    ? `Recording... ${formatSeconds(recordSeconds)}`
+                    : "Tap to speak (Pidgin / English)"}
+                </button>
+
+                {error && (
+                  <span
                     style={{
-                      ...buttonPrimary,
-                      ...(loading ? disabledBtn : {}),
+                      fontSize: "0.8rem",
+                      color: "#b91c1c",
+                      flex: 1,
                     }}
-                    disabled={loading}
                   >
-                    {loading ? "Generating..." : "Generate Petition"}
-                  </button>
-
-                  {/* Voice to text button */}
-                  <button
-                    type="button"
-                    onClick={handleVoiceButtonClick}
-                    style={micButtonStyle}
-                    aria-label={
-                      isRecording
-                        ? "Stop voice recording"
-                        : "Start voice-to-text recording"
-                    }
-                  >
-                    🎙
-                  </button>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {isRecording && (
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#b91c1c",
-                        marginBottom: 2,
-                      }}
-                    >
-                      Recording... max 1 min 30 sec
-                    </span>
-                  )}
-                  {error && (
-                    <span style={{ fontSize: "0.8rem", color: "#b91c1c" }}>
-                      {error}
-                    </span>
-                  )}
-                </div>
+                    {error}
+                  </span>
+                )}
               </div>
             </section>
 
-            {/* PAYMENT SECTION */}
+            {/* Payment */}
             <section
               style={{
-                marginTop: 16,
+                marginTop: 12,
                 background: "#ecfdf5",
                 borderRadius: 12,
                 padding: 12,
@@ -617,9 +640,8 @@ function App() {
                 Pay once per petition to support the platform and help us keep
                 improving access to justice. Most Nigerian users pay{" "}
                 <strong>around ₦1,000</strong>; users in other countries
-                typically pay
-                <strong> around ₦1,500</strong>. You can set the exact amount
-                below.
+                typically pay <strong>around ₦1,500</strong>. You can set the
+                exact amount below.
               </p>
 
               <div
@@ -650,9 +672,7 @@ function App() {
                   }}
                   disabled={payLoading}
                 >
-                  {payLoading
-                    ? "Connecting to Flutterwave..."
-                    : "Pay with Flutterwave"}
+                  {payLoading ? "Connecting to Flutterwave..." : "Pay with Flutterwave"}
                 </button>
               </div>
 
@@ -664,8 +684,9 @@ function App() {
             </section>
           </div>
 
-          {/* RIGHT: RESULT / ROUTING */}
+          {/* RIGHT COLUMN */}
           <div>
+            {/* Generated Petition */}
             <section
               style={{
                 background: "#f9fafb",
@@ -757,6 +778,7 @@ function App() {
               </div>
             </section>
 
+            {/* Routing summary */}
             <section
               style={{
                 background: "#f9fafb",
@@ -784,10 +806,9 @@ function App() {
                   style={{ fontSize: "0.8rem", color: "#6b7280" }}
                 >
                   Once you generate a petition, PetitionDesk will try to route
-                  it to the{" "}
-                  <strong>most appropriate primary institution</strong>, any{" "}
-                  <strong>supervising regulators</strong>, plus key watchdogs
-                  like PCC and NHRC.
+                  it to the <strong>most appropriate primary institution</strong>,
+                  any <strong>supervising regulators</strong>, plus key
+                  watchdogs like PCC and NHRC.
                 </p>
               ) : (
                 <div
@@ -838,7 +859,7 @@ function App() {
               )}
             </section>
 
-            {/* DISCLAIMER */}
+            {/* Disclaimer */}
             <section
               style={{
                 background: "#fefce8",
