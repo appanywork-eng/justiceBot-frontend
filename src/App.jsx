@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 const API_BASE = "https://justicebot-backend-6pzy.onrender.com"; // your Render backend
 
@@ -17,46 +17,127 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState("");
-  const [amount, setAmount] = useState(1000);
-
-  // Payment lock: only paid users see full petition + tools
-  const [isPaid, setIsPaid] = useState(false);
-
-  // Routing modal (PDPS-2.0 preview before commit)
-  const [showRoutingModal, setShowRoutingModal] = useState(false);
-  const [pendingPetitionText, setPendingPetitionText] = useState("");
-  const [pendingPrimary, setPendingPrimary] = useState(null);
-  const [pendingThrough, setPendingThrough] = useState(null);
-  const [pendingCcList, setPendingCcList] = useState([]);
+  const [amount, setAmount] = useState(1000); // default ₦1000 – user can change to 1500, etc.
 
   const hasResult = !!petitionText;
 
-  // --- helpers ---
-  const getPetitionPreview = (text) => {
-    if (!text) return "";
-    const maxChars = 1400; // show enough to judge quality but not full
-    if (text.length <= maxChars || isPaid) return text;
-    return (
-      text.slice(0, maxChars) +
-      "\n\n[...] Full petition text is locked. Complete payment to unlock the full SAN-grade petition."
-    );
+  // -----------------------
+  // Voice to text state
+  // -----------------------
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+  const recordTimeoutRef = useRef(null);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (recordTimeoutRef.current) {
+        clearTimeout(recordTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const startVoiceRecording = () => {
+    if (typeof window === "undefined") {
+      alert("Voice recording is not supported in this environment. Please type your complaint.");
+      return;
+    }
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert(
+        "Voice-to-text is not supported on this browser. Please type your complaint manually."
+      );
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-NG"; // English (Nigeria)
+    recognition.continuous = true;
+    recognition.interimResults = false; // only final results to avoid duplicates
+
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+
+      const cleaned = transcript.trim();
+      if (!cleaned) return;
+
+      setDescription((prev) => {
+        const base = prev ? prev.trim() + " " : "";
+        return (base + cleaned).trim();
+      });
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event);
+      setIsRecording(false);
+      recognitionRef.current = null;
+      if (recordTimeoutRef.current) {
+        clearTimeout(recordTimeoutRef.current);
+      }
+      alert("There was an error with voice recognition. Please try again or type your complaint.");
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+      if (recordTimeoutRef.current) {
+        clearTimeout(recordTimeoutRef.current);
+      }
+    };
+
+    recognition.start();
+    setIsRecording(true);
+
+    // Stop automatically after 90 seconds
+    recordTimeoutRef.current = window.setTimeout(() => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    }, 90_000); // 90 seconds
   };
 
-  const resetOutput = () => {
+  const stopVoiceRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
+
+  const handleVoiceButtonClick = () => {
+    if (isRecording) {
+      // User taps again to stop
+      stopVoiceRecording();
+      return;
+    }
+
+    const ok = window.confirm(
+      "Use your microphone to dictate your complaint (maximum 1 minute 30 seconds).\n\nMake sure you are in a quiet place and speak clearly.\n\nDo you want to start recording now?"
+    );
+    if (!ok) return;
+
+    startVoiceRecording();
+  };
+
+  // -----------------------
+  // Existing logic
+  // -----------------------
+
+  const handleGenerate = async () => {
+    setError("");
     setPetitionText("");
     setPrimaryInstitution(null);
     setThroughInstitution(null);
     setCcList([]);
-  };
-
-  const handleGenerate = async () => {
-    setError("");
-    resetOutput();
-    setPendingPetitionText("");
-    setPendingPrimary(null);
-    setPendingThrough(null);
-    setPendingCcList([]);
-
     if (!description.trim()) {
       setError("Please describe your complaint in detail.");
       return;
@@ -66,7 +147,9 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           fullName,
           email,
@@ -81,12 +164,10 @@ function App() {
       if (!res.ok) {
         setError(data?.error || "Failed to generate petition.");
       } else {
-        // Put everything into PENDING state first (modal will confirm)
-        setPendingPetitionText(data.petitionText || "");
-        setPendingPrimary(data.primaryInstitution || null);
-        setPendingThrough(data.throughInstitution || null);
-        setPendingCcList(Array.isArray(data.ccList) ? data.ccList : []);
-        setShowRoutingModal(true);
+        setPetitionText(data.petitionText || "");
+        setPrimaryInstitution(data.primaryInstitution || null);
+        setThroughInstitution(data.throughInstitution || null);
+        setCcList(Array.isArray(data.ccList) ? data.ccList : []);
       }
     } catch (err) {
       console.error(err);
@@ -96,29 +177,11 @@ function App() {
     }
   };
 
-  const handleConfirmRouting = () => {
-    // Commit pending routing + petition to "live" state
-    setPetitionText(pendingPetitionText || "");
-    setPrimaryInstitution(pendingPrimary || null);
-    setThroughInstitution(pendingThrough || null);
-    setCcList(Array.isArray(pendingCcList) ? pendingCcList : []);
-    setShowRoutingModal(false);
-  };
-
-  const handleCancelRouting = () => {
-    // Allow user to cancel and adjust description / try again
-    setShowRoutingModal(false);
-  };
-
   const handleCopy = async () => {
     if (!petitionText) return;
-    if (!isPaid) {
-      alert("Please complete payment to unlock full copy access to this petition.");
-      return;
-    }
     try {
       await navigator.clipboard.writeText(petitionText);
-      alert("Full petition copied to clipboard.");
+      alert("Petition copied to clipboard.");
     } catch (err) {
       console.error(err);
       alert("Unable to copy. Please select and copy manually.");
@@ -127,11 +190,8 @@ function App() {
 
   const handleEmail = () => {
     if (!petitionText) return;
-    if (!isPaid) {
-      alert("Please complete payment to unlock direct email sending.");
-      return;
-    }
 
+    // Build mailto with all known emails (primary + through + CC)
     const emails = new Set();
 
     const addEmail = (obj) => {
@@ -157,10 +217,6 @@ function App() {
 
   const handleDownload = () => {
     if (!petitionText) return;
-    if (!isPaid) {
-      alert("Please complete payment to unlock full download.");
-      return;
-    }
     const blob = new Blob([petitionText], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -187,7 +243,9 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/pay`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           amount,
           currency: "NGN",
@@ -205,9 +263,7 @@ function App() {
         return;
       }
 
-      // Mark as paid on our side (real verification can be added later with webhook/tx check)
-      setIsPaid(true);
-
+      // Redirect to Flutterwave checkout
       window.location.href = data.paymentLink;
     } catch (err) {
       console.error(err);
@@ -217,11 +273,11 @@ function App() {
     }
   };
 
-  // --- styles ---
+  // --- simple styles (green & white, clean) ---
   const pageStyle = {
     minHeight: "100vh",
     background: "linear-gradient(to bottom, #ffffff, #ecfdf3)",
-    padding: "20px 12px",
+    padding: "20px",
     fontFamily:
       "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   };
@@ -230,17 +286,13 @@ function App() {
     background: "#ffffff",
     borderRadius: "16px",
     boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-    padding: "18px",
+    padding: "20px",
     maxWidth: "1200px",
     margin: "0 auto",
     border: "1px solid #e5e7eb",
   };
 
-  const labelStyle = {
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    marginBottom: 4,
-  };
+  const labelStyle = { fontSize: "0.85rem", fontWeight: 600, marginBottom: 4 };
 
   const inputStyle = {
     width: "100%",
@@ -253,7 +305,7 @@ function App() {
 
   const textareaStyle = {
     ...inputStyle,
-    minHeight: "170px",
+    minHeight: "160px",
     resize: "vertical",
   };
 
@@ -290,44 +342,38 @@ function App() {
     cursor: "not-allowed",
   };
 
-  const canUseTools = hasResult && isPaid;
-  const displayPetition = getPetitionPreview(petitionText);
+  // Mic button style (round)
+  const micButtonStyle = {
+    width: 36,
+    height: 36,
+    borderRadius: "999px",
+    border: "1px solid #047857",
+    backgroundColor: isRecording ? "#047857" : "#ffffff",
+    color: isRecording ? "#ffffff" : "#047857",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    fontSize: "1.1rem",
+  };
 
   return (
     <div style={pageStyle}>
-      {/* marquee styles for top + bottom strips */}
-      <style>{`
-        .pd-marquee {
-          overflow: hidden;
-          white-space: nowrap;
-        }
-        .pd-marquee-content {
-          display: inline-block;
-          padding-left: 100%;
-          animation: pd-marquee-keyframes 18s linear infinite;
-        }
-        @keyframes pd-marquee-keyframes {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-100%); }
-        }
-      `}</style>
-
       <div style={cardStyle}>
         {/* HEADER */}
-        <header style={{ marginBottom: 12 }}>
+        <header style={{ marginBottom: 20 }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               gap: 12,
               flexWrap: "wrap",
-              alignItems: "center",
             }}
           >
             <div>
               <h1
                 style={{
-                  fontSize: "1.6rem",
+                  fontSize: "1.5rem",
                   fontWeight: 800,
                   color: "#065f46",
                 }}
@@ -339,7 +385,6 @@ function App() {
                   fontSize: "0.9rem",
                   color: "#374151",
                   marginTop: 4,
-                  maxWidth: 520,
                 }}
               >
                 AI-powered petition writer for{" "}
@@ -348,43 +393,45 @@ function App() {
                 </strong>
               </p>
             </div>
-          </div>
 
-          {/* TOP MOVING PAYMENT STRIP */}
-          <div
-            style={{
-              marginTop: 10,
-              background: "#ecfdf3",
-              borderRadius: "999px",
-              border: "1px solid #bbf7d0",
-              padding: "4px 10px",
-              fontSize: "0.8rem",
-              color: "#065f46",
-            }}
-            className="pd-marquee"
-          >
-            <div className="pd-marquee-content">
-              ✉️ Write SAN-grade petitions and send them directly by email to
-              the right institutions for just <strong>₦1,000–₦1,500</strong> per
-              petition (depending on your location). —{" "}
+            {/* moving pricing banner (simple, non-animated) */}
+            <div
+              style={{
+                background: "#ecfdf3",
+                borderRadius: "999px",
+                padding: "8px 14px",
+                border: "1px solid #bbf7d0",
+                fontSize: "0.8rem",
+                color: "#065f46",
+                maxWidth: 360,
+              }}
+            >
+              ✉️{" "}
               <strong>
-                Pay once, use the letter for police, banks, agencies, regulators
-                and watchdogs.
-              </strong>
+                Write SAN-grade petitions and send them directly by email for
+                just ₦1,000–₦1,500 per petition
+              </strong>{" "}
+              (amount depends on your country / location).
             </div>
           </div>
         </header>
 
-        {/* MAIN LAYOUT – single column for more space */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* LEFT: FORM + PAYMENT */}
+        {/* BODY LAYOUT */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)",
+            gap: 24,
+          }}
+        >
+          {/* LEFT: FORM */}
           <div>
             <section
               style={{
                 background: "#f9fafb",
                 borderRadius: 12,
                 padding: 14,
-                marginBottom: 12,
+                marginBottom: 16,
                 border: "1px solid #e5e7eb",
               }}
             >
@@ -412,7 +459,7 @@ function App() {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)",
+                    gridTemplateColumns: "1.2fr 1fr",
                     gap: 8,
                   }}
                 >
@@ -492,34 +539,58 @@ function App() {
                   flexWrap: "wrap",
                 }}
               >
-                <button
-                  onClick={handleGenerate}
-                  style={{
-                    ...buttonPrimary,
-                    ...(loading ? disabledBtn : {}),
-                  }}
-                  disabled={loading}
-                >
-                  {loading ? "Generating..." : "Generate Petition"}
-                </button>
-
-                {error && (
-                  <span
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button
+                    onClick={handleGenerate}
                     style={{
-                      fontSize: "0.8rem",
-                      color: "#b91c1c",
+                      ...buttonPrimary,
+                      ...(loading ? disabledBtn : {}),
                     }}
+                    disabled={loading}
                   >
-                    {error}
-                  </span>
-                )}
+                    {loading ? "Generating..." : "Generate Petition"}
+                  </button>
+
+                  {/* Voice to text button */}
+                  <button
+                    type="button"
+                    onClick={handleVoiceButtonClick}
+                    style={micButtonStyle}
+                    aria-label={
+                      isRecording
+                        ? "Stop voice recording"
+                        : "Start voice-to-text recording"
+                    }
+                  >
+                    🎙
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {isRecording && (
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#b91c1c",
+                        marginBottom: 2,
+                      }}
+                    >
+                      Recording... max 1 min 30 sec
+                    </span>
+                  )}
+                  {error && (
+                    <span style={{ fontSize: "0.8rem", color: "#b91c1c" }}>
+                      {error}
+                    </span>
+                  )}
+                </div>
               </div>
             </section>
 
             {/* PAYMENT SECTION */}
             <section
               style={{
-                marginTop: 12,
+                marginTop: 16,
                 background: "#ecfdf5",
                 borderRadius: 12,
                 padding: 12,
@@ -534,7 +605,7 @@ function App() {
                   marginBottom: 6,
                 }}
               >
-                Payment (unlock full petition)
+                Payment (unlock full sending power)
               </h3>
               <p
                 style={{
@@ -543,9 +614,12 @@ function App() {
                   marginBottom: 6,
                 }}
               >
-                Most Nigerian users pay <strong>around ₦1,000</strong>; users in
-                other countries typically pay <strong>around ₦1,500</strong>.
-                You can set the exact amount below.
+                Pay once per petition to support the platform and help us keep
+                improving access to justice. Most Nigerian users pay{" "}
+                <strong>around ₦1,000</strong>; users in other countries
+                typically pay
+                <strong> around ₦1,500</strong>. You can set the exact amount
+                below.
               </p>
 
               <div
@@ -553,8 +627,8 @@ function App() {
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
+                  marginBottom: 10,
                   flexWrap: "wrap",
-                  marginBottom: 6,
                 }}
               >
                 <div>
@@ -580,28 +654,17 @@ function App() {
                     ? "Connecting to Flutterwave..."
                     : "Pay with Flutterwave"}
                 </button>
-
-                {isPaid && (
-                  <span
-                    style={{
-                      fontSize: "0.8rem",
-                      color: "#047857",
-                      fontWeight: 600,
-                    }}
-                  >
-                    ✅ Payment unlocked for this session.
-                  </span>
-                )}
               </div>
 
               <p style={{ fontSize: "0.75rem", color: "#4b5563" }}>
-                After payment, you&apos;ll unlock the full petition text, copy,
-                email, and download tools.
+                ✅ You can still review and edit your petition text here. 💡
+                After payment, you’ll be able to confidently send it by email to
+                the correct institutions.
               </p>
             </section>
           </div>
 
-          {/* RIGHT: RESULT + ROUTING + DISCLAIMER (but full width now) */}
+          {/* RIGHT: RESULT / ROUTING */}
           <div>
             <section
               style={{
@@ -610,6 +673,7 @@ function App() {
                 padding: 14,
                 border: "1px solid #e5e7eb",
                 marginBottom: 12,
+                minHeight: 220,
               }}
             >
               <div
@@ -633,18 +697,14 @@ function App() {
                 </h2>
 
                 <div
-                  style={{
-                    display: "flex",
-                    gap: 6,
-                    flexWrap: "wrap",
-                  }}
+                  style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
                 >
                   <button
                     style={{
                       ...buttonSecondary,
-                      ...(canUseTools ? {} : disabledBtn),
+                      ...(hasResult ? {} : disabledBtn),
                     }}
-                    disabled={!canUseTools}
+                    disabled={!hasResult}
                     onClick={handleCopy}
                   >
                     📋 Copy
@@ -652,9 +712,9 @@ function App() {
                   <button
                     style={{
                       ...buttonSecondary,
-                      ...(canUseTools ? {} : disabledBtn),
+                      ...(hasResult ? {} : disabledBtn),
                     }}
-                    disabled={!canUseTools}
+                    disabled={!hasResult}
                     onClick={handleEmail}
                   >
                     ✉️ Email
@@ -662,9 +722,9 @@ function App() {
                   <button
                     style={{
                       ...buttonSecondary,
-                      ...(canUseTools ? {} : disabledBtn),
+                      ...(hasResult ? {} : disabledBtn),
                     }}
-                    disabled={!canUseTools}
+                    disabled={!hasResult}
                     onClick={handleDownload}
                   >
                     ⬇️ Download
@@ -681,17 +741,17 @@ function App() {
                   fontSize: "0.85rem",
                   color: "#111827",
                   whiteSpace: "pre-wrap",
-                  minHeight: 220,
-                  maxHeight: 460,
+                  minHeight: 140,
+                  maxHeight: 360,
                   overflow: "auto",
                 }}
               >
-                {petitionText ? (
-                  <span>{displayPetition}</span>
+                {hasResult ? (
+                  petitionText
                 ) : (
                   <span style={{ color: "#9ca3af" }}>
                     Your SAN-grade petition will appear here after you click{" "}
-                    <strong>“Generate Petition”</strong> and confirm the routing.
+                    <strong>“Generate Petition”</strong>.
                   </span>
                 )}
               </div>
@@ -703,7 +763,7 @@ function App() {
                 borderRadius: 12,
                 padding: 12,
                 border: "1px solid #e5e7eb",
-                marginBottom: 10,
+                marginBottom: 12,
               }}
             >
               <h3
@@ -720,15 +780,19 @@ function App() {
               {!primaryInstitution &&
               !throughInstitution &&
               (!ccList || ccList.length === 0) ? (
-                <p style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                  Once you generate a petition, PetitionDesk will route it to
-                  the <strong>most appropriate primary institution</strong>, any{" "}
+                <p
+                  style={{ fontSize: "0.8rem", color: "#6b7280" }}
+                >
+                  Once you generate a petition, PetitionDesk will try to route
+                  it to the{" "}
+                  <strong>most appropriate primary institution</strong>, any{" "}
                   <strong>supervising regulators</strong>, plus key watchdogs
-                  like PCC and NHRC. You will see and confirm this in a routing
-                  preview modal before the petition is created.
+                  like PCC and NHRC.
                 </p>
               ) : (
-                <div style={{ fontSize: "0.8rem", color: "#111827" }}>
+                <div
+                  style={{ fontSize: "0.8rem", color: "#111827" }}
+                >
                   {primaryInstitution && (
                     <div style={{ marginBottom: 6 }}>
                       <strong>Primary institution:</strong>
@@ -736,11 +800,6 @@ function App() {
                       {primaryInstitution.address && (
                         <div style={{ color: "#4b5563" }}>
                           {primaryInstitution.address}
-                        </div>
-                      )}
-                      {primaryInstitution.email && (
-                        <div style={{ color: "#047857" }}>
-                          {primaryInstitution.email}
                         </div>
                       )}
                     </div>
@@ -755,11 +814,6 @@ function App() {
                           {throughInstitution.address}
                         </div>
                       )}
-                      {throughInstitution.email && (
-                        <div style={{ color: "#047857" }}>
-                          {throughInstitution.email}
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -770,18 +824,11 @@ function App() {
                         style={{
                           paddingLeft: "1rem",
                           marginTop: 4,
-                          marginBottom: 0,
                         }}
                       >
                         {ccList.map((cc, idx) => (
                           <li key={idx} style={{ marginBottom: 2 }}>
                             <span>{cc.org}</span>
-                            {cc.email && (
-                              <span style={{ color: "#047857" }}>
-                                {" "}
-                                – {cc.email}
-                              </span>
-                            )}
                           </li>
                         ))}
                       </ul>
@@ -791,214 +838,45 @@ function App() {
               )}
             </section>
 
-            {/* BOTTOM MOVING DISCLAIMER STRIP */}
-            <div
+            {/* DISCLAIMER */}
+            <section
               style={{
                 background: "#fefce8",
-                borderRadius: 999,
+                borderRadius: 12,
+                padding: 10,
                 border: "1px solid #facc15",
-                padding: "4px 10px",
-                fontSize: "0.75rem",
-                color: "#854d0e",
               }}
-              className="pd-marquee"
             >
-              <div className="pd-marquee-content">
-                ⚠️ Disclaimer: PetitionDesk.com is not a law firm and does not
+              <h4
+                style={{
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  color: "#854d0e",
+                  marginBottom: 4,
+                }}
+              >
+                Disclaimer
+              </h4>
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#854d0e",
+                  lineHeight: 1.4,
+                }}
+              >
+                PetitionDesk.com is <strong>not a law firm</strong> and does not
                 provide legal advice. It is an AI-powered drafting tool that
                 helps you generate professional petition letters based on the
                 facts you provide. Using this app does not create a
                 lawyer–client relationship. You remain responsible for
-                reviewing, editing, and approving any petition before submitting
+                reviewing, editing, and approving any petition before you submit
                 it to any institution or court. For complex or urgent matters,
                 please consult a qualified lawyer.
-              </div>
-            </div>
+              </p>
+            </section>
           </div>
         </div>
       </div>
-
-      {/* ROUTING MODAL (PDPS-2.0) */}
-      {showRoutingModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-            padding: 12,
-          }}
-        >
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: 16,
-              maxWidth: 700,
-              width: "100%",
-              padding: 16,
-              boxShadow: "0 20px 45px rgba(0,0,0,0.25)",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: "1rem",
-                fontWeight: 700,
-                color: "#065f46",
-                marginBottom: 8,
-              }}
-            >
-              Confirm routing before generating petition
-            </h2>
-            <p
-              style={{
-                fontSize: "0.8rem",
-                color: "#4b5563",
-                marginBottom: 10,
-              }}
-            >
-              Please confirm that these institutions are correct. This helps
-              ensure your petition goes to the right authority and watchdogs.
-            </p>
-
-            <div
-              style={{
-                fontSize: "0.8rem",
-                color: "#111827",
-                display: "grid",
-                gap: 8,
-              }}
-            >
-              {pendingPrimary && (
-                <div
-                  style={{
-                    padding: 8,
-                    borderRadius: 8,
-                    background: "#ecfdf5",
-                    border: "1px solid #bbf7d0",
-                  }}
-                >
-                  <strong>Primary institution:</strong>
-                  <div>{pendingPrimary.org}</div>
-                  {pendingPrimary.address && (
-                    <div style={{ color: "#4b5563" }}>
-                      {pendingPrimary.address}
-                    </div>
-                  )}
-                  {pendingPrimary.email && (
-                    <div style={{ color: "#047857" }}>
-                      {pendingPrimary.email}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {pendingThrough && (
-                <div
-                  style={{
-                    padding: 8,
-                    borderRadius: 8,
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <strong>Through (supervising authority):</strong>
-                  <div>{pendingThrough.org}</div>
-                  {pendingThrough.address && (
-                    <div style={{ color: "#4b5563" }}>
-                      {pendingThrough.address}
-                    </div>
-                  )}
-                  {pendingThrough.email && (
-                    <div style={{ color: "#047857" }}>
-                      {pendingThrough.email}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {pendingCcList && pendingCcList.length > 0 && (
-                <div
-                  style={{
-                    padding: 8,
-                    borderRadius: 8,
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <strong>CC (watchdogs / other bodies):</strong>
-                  <ul
-                    style={{
-                      paddingLeft: "1rem",
-                      marginTop: 4,
-                      marginBottom: 0,
-                    }}
-                  >
-                    {pendingCcList.map((cc, idx) => (
-                      <li key={idx} style={{ marginBottom: 2 }}>
-                        <span>{cc.org}</span>
-                        {cc.email && (
-                          <span style={{ color: "#047857" }}>
-                            {" "}
-                            – {cc.email}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div
-                style={{
-                  marginTop: 4,
-                  padding: 8,
-                  borderRadius: 8,
-                  background: "#f9fafb",
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <strong>Short summary of your description:</strong>
-                <div style={{ color: "#4b5563", marginTop: 2 }}>
-                  {description
-                    ? description.slice(0, 260) +
-                      (description.length > 260 ? "..." : "")
-                    : "No description text found."}
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-                marginTop: 14,
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                onClick={handleCancelRouting}
-                style={{
-                  ...buttonSecondary,
-                  backgroundColor: "#ffffff",
-                }}
-              >
-                Cancel / Adjust
-              </button>
-              <button
-                onClick={handleConfirmRouting}
-                style={buttonPrimary}
-              >
-                ✅ Confirm & Generate Petition
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
