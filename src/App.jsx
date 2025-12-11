@@ -146,45 +146,50 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handlePay = async () => {
-    setError("");
+const handlePay = async () => {
+  setError("");
 
-    if (!email || !fullName) {
-      setError("Enter your full name and email before payment.");
+  if (!email || !fullName) {
+    setError("Enter your full name and email before payment.");
+    return;
+  }
+
+  const amt = Number(amount);
+  if (!amt || amt < 1000) {
+    setError("Minimum petition fee is ₦1000.");
+    return;
+  }
+
+  setPayLoading(true);
+  try {
+    const res = await fetch(`${API_BASE}/pay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: amt,
+        currency: "NGN",
+        fullName,
+        email,
+        description: description || "PetitionDesk – Petition drafting fee",
+      }),
+    });
+
+    const data = await res.json();
+
+    // Debug output so we see EXACT backend response
+    if (!data || !data.paymentLink) {
+      alert("Backend Response: " + JSON.stringify(data));
+      setError(data?.error || "Payment failed.");
       return;
     }
 
-    if (!amount || amount < 1000) {
-      setError("Minimum petition fee is ₦1000. Please enter ₦1000 or above.");
-      return;
-    }
-
-    setPayLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/pay`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount,
-          currency: "NGN",
-          fullName,
-          email,
-          description: description || "PetitionDesk – Petition drafting fee",
-        }),
-      });
-      const data = await res.json();
-
-      if (data.ok === false || !data.paymentLink) {
-        setError(data.error || "Payment failed.");
-      } else {
-        window.location.href = data.paymentLink;
-      }
-    } catch {
-      setError("Payment error.");
-    } finally {
-      setPayLoading(false);
-    }
-  };
+    window.location.href = data.paymentLink;
+  } catch (err) {
+    setError("Payment error.");
+  } finally {
+    setPayLoading(false);
+  }
+};
 
   const handleMicClick = () => {
     if (isRecording && recognitionRef.current) {
