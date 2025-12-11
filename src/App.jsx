@@ -9,7 +9,6 @@ function App() {
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
 
-  const [petitionId, setPetitionId] = useState(null); // 👈 per-petition id
   const [petitionText, setPetitionText] = useState("");
   const [primaryInstitution, setPrimaryInstitution] = useState(null);
   const [throughInstitution, setThroughInstitution] = useState(null);
@@ -19,43 +18,43 @@ function App() {
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [amount, setAmount] = useState(1000);
+  // Payment unlock strictly tied to one petition
   const [paymentUnlocked, setPaymentUnlocked] = useState(false);
+  const [petitionId, setPetitionId] = useState(null);
+
+  const [amount, setAmount] = useState(1000);
 
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
 
   const hasResult = !!petitionText;
 
-  // ----------------------------------------------------
-  // Detect redirect back from Flutterwave
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // 1️⃣ AFTER PAYMENT REDIRECT → RESTORE petitionId + unlock tools
+  // -------------------------------------------------------------
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
-      if (url.pathname.includes("payment-complete")) {
-        const status = (url.searchParams.get("status") || "").toLowerCase();
-        if (!status || status === "successful" || status === "completed") {
-          setPaymentUnlocked(true);
-          alert("Payment confirmed. Full tools unlocked for this petition.");
-        }
+      const paid = url.searchParams.get("status");
+      const pid = url.searchParams.get("petitionId");
+
+      if (paid && pid) {
+        // Unlock ONLY this petition
+        setPaymentUnlocked(true);
+        setPetitionId(pid);
+
+        alert("Payment confirmed. Tools unlocked for this petition.");
       }
-    } catch (err) {
-      console.error("Payment detection error:", err);
-    }
+    } catch (err) {}
   }, []);
 
-  // ----------------------------------------------------
-  // Generate Petition (also resets unlock + new petitionId)
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // 2️⃣ GENERATE PETITION → backend returns a petitionId
+  // -------------------------------------------------------------
   const handleGenerate = async () => {
     setError("");
-    setPetitionText("");
-    setPrimaryInstitution(null);
-    setThroughInstitution(null);
-    setCcList([]);
+    setPaymentUnlocked(false);
     setPetitionId(null);
-    setPaymentUnlocked(false); // 👈 must pay again per new petition
 
     if (!description.trim()) {
       setError("Please describe your complaint.");
@@ -77,62 +76,57 @@ function App() {
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error || "Failed to generate.");
+
+      if (!data.ok) {
+        setError(data.error || "Failed to generate.");
       } else {
-        setPetitionId(data.petitionId || null); // 👈 save petitionId
         setPetitionText(data.petitionText || "");
         setPrimaryInstitution(data.primaryInstitution || null);
         setThroughInstitution(data.throughInstitution || null);
         setCcList(Array.isArray(data.ccList) ? data.ccList : []);
+        setPetitionId(data.petitionId); // 🔥 SAVE petitionId returned by backend
       }
     } catch (err) {
-      console.error(err);
       setError("Network error.");
     } finally {
       setLoading(false);
     }
   };
-
-  // ----------------------------------------------------
-  // Tools must be locked until paid
-  // ----------------------------------------------------
+// -------------------------------------------------------------
+  // 3️⃣ HELPER — RESTRICT TOOLS UNLESS PAID FOR THIS petitionId
+  // -------------------------------------------------------------
   const assertPaid = () => {
     if (!paymentUnlocked) {
-      alert("Please pay to unlock Copy, Email and Download for this petition.");
+      alert("Please pay to unlock the tools for this petition.");
       return false;
     }
     return true;
   };
 
+  // -------------------------------------------------------------
+  // 4️⃣ COPY / EMAIL / DOWNLOAD
+  // -------------------------------------------------------------
   const handleCopy = async () => {
-    if (!petitionText) return;
     if (!assertPaid()) return;
     try {
       await navigator.clipboard.writeText(petitionText);
-      alert("Petition copied.");
-    } catch (err) {
-      console.error(err);
-      alert("Unable to copy. Please select and copy manually.");
-    }
+      alert("Copied.");
+    } catch {}
   };
 
   const handleEmail = () => {
-    if (!petitionText) return;
     if (!assertPaid()) return;
 
     const emails = new Set();
+
     const add = (x) => {
       if (!x || !x.email) return;
-      x.email
-        .split(/[,;]/)
-        .map((e) => e.trim())
-        .filter(Boolean)
-        .forEach((e) => emails.add(e));
+      x.email.split(/[,;]/).forEach((e) => emails.add(e.trim()));
     };
+
     add(primaryInstitution);
     add(throughInstitution);
-    (ccList || []).forEach(add);
+    ccList.forEach(add);
 
     const to = [...emails].join(",");
     const subject = encodeURIComponent("Formal Petition");
@@ -142,9 +136,7 @@ function App() {
   };
 
   const handleDownload = () => {
-    if (!petitionText) return;
     if (!assertPaid()) return;
-
     const blob = new Blob([petitionText], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -154,24 +146,17 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  // ----------------------------------------------------
-  // Payment (per petition, min ₦1000, requires petitionId)
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // 5️⃣ PAYMENT — now sends petitionId to backend
+  // -------------------------------------------------------------
   const handlePay = async () => {
-    setError("");
-
-    if (!hasResult || !petitionId) {
-      setError("Please generate your petition before making payment.");
-      return;
-    }
-
     if (!email || !fullName) {
-      setError("Enter your full name & email before payment.");
+      setError("Enter your name & email before payment.");
       return;
     }
 
-    if (!amount || amount < 1000) {
-      setError("Minimum petition fee is ₦1000.");
+    if (!petitionId) {
+      alert("Please generate a petition first.");
       return;
     }
 
@@ -185,32 +170,27 @@ function App() {
           currency: "NGN",
           fullName,
           email,
-          description: description || "PetitionDesk – Petition drafting fee",
-          petitionId, // 👈 critical
+          petitionId, // 🔥 sent for per-petition unlocking
         }),
       });
+
       const data = await res.json();
 
-      if (!data.ok || !data.paymentLink) {
-        console.error("Backend pay error:", data);
-        setError(data.error || "Payment failed.");
-        alert(`Payment error: ${data.error || "Unable to start payment."}`);
-        return;
+      if (data.paymentLink) {
+        window.location.href = data.paymentLink; // Flutterwave redirect
+      } else {
+        alert("Payment error: " + (data.error || "Unknown error"));
       }
-
-      // Redirect to Flutterwave
-      window.location.href = data.paymentLink;
     } catch (err) {
-      console.error(err);
-      setError("Payment error.");
+      alert("Payment failed.");
     } finally {
       setPayLoading(false);
     }
   };
 
-  // ----------------------------------------------------
-  // Voice to text
-  // ----------------------------------------------------
+  // -------------------------------------------------------------
+  // 6️⃣ VOICE-TO-TEXT
+  // -------------------------------------------------------------
   const handleMicClick = () => {
     if (isRecording && recognitionRef.current) {
       recognitionRef.current.stop();
@@ -221,7 +201,7 @@ function App() {
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Voice input not supported on this browser.");
+      alert("Voice input not supported on this device.");
       return;
     }
 
@@ -240,25 +220,27 @@ function App() {
         if (event.results[i].isFinal) finalTranscript += t + " ";
         else interim += t;
       }
+
       const combined = (finalTranscript || interim).trim();
-      if (combined)
+      if (combined) {
         setDescription((prev) => (prev ? prev + "\n" + combined : combined));
+      }
     };
 
-    recog.onerror = () => setIsRecording(false);
     recog.onend = () => setIsRecording(false);
     recog.start();
     setIsRecording(true);
 
+    // Auto-stop after 90 seconds
     setTimeout(() => {
-      if (recognitionRef.current && isRecording)
+      if (recognitionRef.current && isRecording) {
         recognitionRef.current.stop();
+      }
     }, 90000);
   };
-
-  // ----------------------------------------------------
-  // Basic styles (2-box layout, clean & plain)
-  // ----------------------------------------------------
+// -------------------------------------------------------------
+  // 7️⃣ UI STYLES (SIMPLE TWO-BOX LAYOUT)
+  // -------------------------------------------------------------
   const layoutStyle = {
     maxWidth: 900,
     margin: "0 auto",
@@ -270,11 +252,14 @@ function App() {
   const boxStyle = {
     padding: 12,
     marginBottom: 16,
+    border: "1px solid #d1d5db",
+    borderRadius: 8,
+    background: "#ffffff",
   };
 
   const input = {
     width: "100%",
-    padding: "8px 10px",
+    padding: "10px 12px",
     fontSize: "0.95rem",
     border: "1px solid #ccc",
     borderRadius: 6,
@@ -301,9 +286,12 @@ function App() {
     cursor: "pointer",
   };
 
+  // -------------------------------------------------------------
+  // 8️⃣ RETURN — UI RENDER
+  // -------------------------------------------------------------
   return (
     <div style={layoutStyle}>
-      {/* TOP SCROLLING DISCLAIMER */}
+      {/* TOP DISCLAIMER SCROLLER */}
       <marquee
         style={{
           background: "#fff8e1",
@@ -314,8 +302,8 @@ function App() {
         }}
       >
         Disclaimer: PetitionDesk.com is not a law firm and does not provide
-        legal advice. It is an AI-powered drafting tool. Always review your
-        petition before sending.
+        legal advice. Always review your petition before sending. This tool
+        generates professional-grade drafts ONLY.
       </marquee>
 
       {/* TITLE */}
@@ -324,13 +312,15 @@ function App() {
         AI No.1 petition writer for complaints and redress.
       </p>
 
-      {/* BOX 1 – INPUTS */}
+      {/* ============================================================
+          BOX 1 — USER INPUT / GENERATE
+      ============================================================ */}
       <div style={boxStyle}>
         <h3>Enter your details</h3>
 
         <input
           style={input}
-          placeholder="Full name"
+          placeholder="Full name (e.g. Ngozi Yemisi Musa)"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
         />
@@ -361,31 +351,33 @@ function App() {
           placeholder="Describe your complaint here..."
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-        />
+        ></textarea>
 
         <button style={btn} onClick={handleGenerate}>
           {loading ? "Generating..." : "Generate Petition"}
         </button>
 
         <button
-          style={{ ...thinBtn, background: isRecording ? "#b91c1c" : "#065f46" }}
+          style={{
+            ...thinBtn,
+            background: isRecording ? "#b91c1c" : "#065f46",
+          }}
           onClick={handleMicClick}
         >
           {isRecording ? "Stop Recording" : "Voice to Text"}
         </button>
 
-        {error && (
-          <p style={{ color: "red", marginTop: 8, whiteSpace: "pre-wrap" }}>
-            {error}
-          </p>
-        )}
+        {error && <p style={{ color: "red" }}>{error}</p>}
       </div>
 
-      {/* BOX 2 – ONLY AFTER GENERATION */}
+      {/* ============================================================
+          BOX 2 — SHOW ONLY AFTER PETITION IS GENERATED
+      ============================================================ */}
       {hasResult && (
         <div style={boxStyle}>
-          <h3>Your petition</h3>
+          <h3>Your Petition (Preview Only)</h3>
 
+          {/* Petition display */}
           <div
             style={{
               whiteSpace: "pre-wrap",
@@ -398,7 +390,7 @@ function App() {
             {petitionText}
           </div>
 
-          {/* TOOLS */}
+          {/* ACTION BUTTONS (LOCKED UNTIL PAYMENT FOR THIS PETITION) */}
           <div style={{ marginTop: 10 }}>
             <button
               style={{
@@ -414,8 +406,8 @@ function App() {
             <button
               style={{
                 ...thinBtn,
-                opacity: paymentUnlocked ? 1 : 0.4,
                 marginLeft: 6,
+                opacity: paymentUnlocked ? 1 : 0.4,
               }}
               disabled={!paymentUnlocked}
               onClick={handleEmail}
@@ -426,8 +418,8 @@ function App() {
             <button
               style={{
                 ...thinBtn,
-                opacity: paymentUnlocked ? 1 : 0.4,
                 marginLeft: 6,
+                opacity: paymentUnlocked ? 1 : 0.4,
               }}
               disabled={!paymentUnlocked}
               onClick={handleDownload}
@@ -436,9 +428,10 @@ function App() {
             </button>
           </div>
 
-          {/* PAYMENT */}
+          {/* PAYMENT BOX — PER PETITION UNLOCK */}
           <div style={{ marginTop: 16 }}>
-            <h4>Unlock tools</h4>
+            <h4>Unlock Tools</h4>
+
             <input
               type="number"
               style={{ ...input, width: 120 }}
@@ -448,24 +441,27 @@ function App() {
             />
 
             <button style={btn} onClick={handlePay}>
-              {payLoading ? "Connecting..." : "Pay"}
+              {payLoading ? "Connecting..." : "Pay ₦" + amount}
             </button>
           </div>
 
-          {/* ROUTING */}
+          {/* ROUTING INFORMATION */}
           <div style={{ marginTop: 16 }}>
-            <h4>Routing</h4>
+            <h4>Routing Summary</h4>
+
             {primaryInstitution && (
               <p>
                 <strong>Primary:</strong> {primaryInstitution.org}
               </p>
             )}
+
             {throughInstitution && (
               <p>
                 <strong>Through:</strong> {throughInstitution.org}
               </p>
             )}
-            {ccList && ccList.length > 0 && (
+
+            {ccList?.length > 0 && (
               <div>
                 <strong>CC:</strong>
                 <ul>
@@ -479,18 +475,19 @@ function App() {
         </div>
       )}
 
-      {/* BOTTOM MOVING TEXT */}
+      {/* BOTTOM SCROLLING PAYMENT NOTICE */}
       <marquee
         style={{
-          marginTop: 20,
           background: "#e6fff1",
           padding: 8,
           color: "#065f46",
           fontSize: "0.85rem",
+          marginTop: 20,
         }}
       >
-        Write professional-grade petitions and send them directly by email for
-        ₦1,000 – ₦1,500 depending on your location.
+        Write professional-grade petitions and unlock email/copy/download for
+        ₦1,000 – ₦1,500 depending on location. Payment unlocks **only the
+        petition you generated**, not unlimited access.
       </marquee>
     </div>
   );
