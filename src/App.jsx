@@ -8,23 +8,19 @@ export default function App() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  /* ---------------- API BASE ----------------
-     Priority:
-     1) VITE_API_URL (Render)
-     2) Render backend hard fallback
-     3) Local dev fallback
-  ------------------------------------------- */
+  // 1) Prefer VITE_API_URL (production) 2) petitiondesk.com fallback 3) local LAN fallback
   const API_BASE = useMemo(() => {
-    const envUrl = (import.meta?.env?.VITE_API_URL || "").trim();
-    if (envUrl) return envUrl.replace(/\/+$/, "");
+    const fromEnv = (import.meta?.env?.VITE_API_URL || "").trim();
+    if (fromEnv) return fromEnv.replace(/\/+$/, "");
 
-    // Hard safety fallback (production)
-    if (window.location.hostname.includes("petitiondesk")) {
-      return "https://justicebot-backend-6pzy.onrender.com";
-    }
+    const host = window.location.hostname || "localhost";
+    const isProdDomain = host.includes("petitiondesk.com");
 
-    // Local dev
-    return "http://localhost:5000";
+    // If you’re on your public domain and forgot env, fallback to your Render backend seen in screenshots.
+    if (isProdDomain) return "https://justicebot-backend-6pzy.onrender.com";
+
+    // Local dev fallback
+    return `http://${host}:5000`;
   }, []);
 
   async function handleSubmit(e) {
@@ -49,12 +45,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      let data = {};
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error("Backend did not return JSON");
-      }
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data?.ok) {
         throw new Error(data?.error || `Server error (${res.status})`);
@@ -64,7 +55,7 @@ export default function App() {
     } catch (err) {
       setError(
         err?.message ||
-          `Failed to fetch. Backend: ${API_BASE}`
+          `Failed to fetch. Check backend URL (${API_BASE}) and ensure backend is running.`
       );
     } finally {
       setLoading(false);
@@ -72,26 +63,46 @@ export default function App() {
   }
 
   const petitionText = result?.petitionText || "";
+  const subject = result?.subject || "FORMAL COMPLAINT / PETITION";
 
-  /* ---------------- ACTIONS ---------------- */
-  function handleCopy() {
+  const routingPrimary = result?.routing?.primary || null;
+  const routingThrough = result?.routing?.through || null;
+  const routingCC = Array.isArray(result?.routing?.cc) ? result.routing.cc : [];
+
+  const toEmails = Array.isArray(result?.emailTargets?.to) ? result.emailTargets.to : [];
+  const ccEmails = Array.isArray(result?.emailTargets?.cc) ? result.emailTargets.cc : [];
+
+  function copyText() {
+    if (!petitionText) return;
     navigator.clipboard.writeText(petitionText);
   }
 
-  function handleEmail() {
-    const subject = encodeURIComponent(result?.subject || "Formal Petition");
-    const body = encodeURIComponent(petitionText);
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  }
+  function openEmail() {
+    setError("");
 
-  function handlePDF() {
-    const blob = new Blob([petitionText], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "petition.pdf";
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!petitionText) {
+      setError("No petition text to email yet.");
+      return;
+    }
+
+    // If no TO email exists in directory, we cannot auto-fill recipients.
+    if (!toEmails.length) {
+      setError(
+        "No email address found for the routed 'TO' institution. Add it to institution_directory.json, redeploy backend, then try again."
+      );
+      return;
+    }
+
+    const to = toEmails.join(",");
+    const cc = ccEmails.join(",");
+
+    // mailto URL
+    const params = new URLSearchParams();
+    if (cc) params.set("cc", cc);
+    params.set("subject", subject);
+    params.set("body", petitionText);
+
+    window.location.href = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
   }
 
   return (
@@ -101,9 +112,9 @@ export default function App() {
 
       <div style={styles.helpBox}>
         <strong>How to get the best output</strong>
-        <ol>
-          <li>Write your complaint like a story (who, what, where, when).</li>
-          <li>Include location keywords (e.g. Kubwa, Abuja).</li>
+        <ol style={{ marginTop: 8 }}>
+          <li>Write your complaint like a story: who, what, where, when, how.</li>
+          <li>Include location keywords (e.g. Kubwa, Gombe, Lagos).</li>
           <li>Be factual and clear.</li>
         </ol>
         <p style={styles.note}>
@@ -137,13 +148,9 @@ export default function App() {
         />
 
         <label style={styles.label}>
-          Upload Evidence (UI only for now)
+          Upload Evidence (Photos, Videos, Documents) — (UI only for now)
         </label>
-        <input
-          type="file"
-          multiple
-          onChange={(e) => setFiles([...e.target.files])}
-        />
+        <input type="file" multiple onChange={(e) => setFiles([...e.target.files])} />
 
         <button type="submit" style={styles.button} disabled={loading}>
           {loading ? "Generating..." : "Generate Petition"}
@@ -160,21 +167,59 @@ export default function App() {
             <div><b>usedAI:</b> {String(result.usedAI)}</div>
             <div><b>jurisdiction:</b> {result.jurisdiction || "(auto)"}</div>
             <div><b>inferredState:</b> {result.inferredState || "(none)"}</div>
-            <div><b>TO:</b> {result.toOrg || "(auto-resolved)"}</div>
+          </div>
+
+          <div style={styles.routingBox}>
+            <div style={styles.routingTitle}>Routing (resolved)</div>
+
+            <div style={styles.routingRow}>
+              <b>TO:</b>{" "}
+              {routingPrimary?.org || "(none)"}
+              {routingPrimary?.email ? <span> — {routingPrimary.email}</span> : <span style={styles.muted}> — (no email on directory)</span>}
+            </div>
+
+            {routingThrough?.org ? (
+              <div style={styles.routingRow}>
+                <b>THROUGH:</b> {routingThrough.org}
+                {routingThrough.email ? <span> — {routingThrough.email}</span> : <span style={styles.muted}> — (no email)</span>}
+              </div>
+            ) : null}
+
+            <div style={styles.routingRow}>
+              <b>CC:</b>{" "}
+              {routingCC.length ? "" : "(none)"}
+            </div>
+
+            {routingCC.length ? (
+              <ul style={styles.ccList}>
+                {routingCC.map((c, idx) => (
+                  <li key={`${c.org}-${idx}`}>
+                    {c.org}{" "}
+                    {c.email ? (
+                      <span style={styles.ccEmail}>({c.email})</span>
+                    ) : (
+                      <span style={styles.muted}>(no email)</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
 
           <pre style={styles.pre}>{petitionText}</pre>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button style={styles.secondaryButton} onClick={handleCopy}>
+          <div style={styles.actions}>
+            <button style={styles.secondaryButton} onClick={copyText}>
               Copy Text
             </button>
-            <button style={styles.secondaryButton} onClick={handleEmail}>
+
+            <button style={styles.secondaryButton} onClick={openEmail}>
               Email
             </button>
-            <button style={styles.secondaryButton} onClick={handlePDF}>
-              Download PDF
-            </button>
+          </div>
+
+          <div style={styles.smallNote}>
+            If “Email” says no TO email, update <b>institution_directory.json</b> with the correct email for that routed institution, redeploy backend, then try again.
           </div>
         </div>
       )}
@@ -184,7 +229,7 @@ export default function App() {
 
 /* ---------------- STYLES ---------------- */
 const styles = {
-  page: { maxWidth: 800, margin: "0 auto", padding: 20, fontFamily: "Arial, sans-serif" },
+  page: { maxWidth: 820, margin: "0 auto", padding: 20, fontFamily: "Arial, sans-serif" },
   title: { textAlign: "center", marginBottom: 5 },
   subtitle: { textAlign: "center", color: "#555", marginBottom: 20 },
   helpBox: { background: "#f7f7f7", padding: 15, borderRadius: 6, marginBottom: 20 },
@@ -199,16 +244,27 @@ const styles = {
     background: "#003366",
     color: "#fff",
     border: "none",
-    borderRadius: 4,
+    borderRadius: 6,
     cursor: "pointer",
   },
   secondaryButton: {
     padding: 10,
     fontSize: 14,
     cursor: "pointer",
+    borderRadius: 6,
+    border: "1px solid #ccc",
+    background: "#fff",
   },
   error: { marginTop: 10, color: "red" },
   resultBox: { marginTop: 30, background: "#fafafa", padding: 15, borderRadius: 6 },
-  pre: { whiteSpace: "pre-wrap", fontSize: 14 },
+  pre: { whiteSpace: "pre-wrap", fontSize: 14, background: "#fff", padding: 12, borderRadius: 6, border: "1px solid #eee" },
   meta: { fontSize: 13, color: "#333", marginBottom: 10, display: "grid", gap: 4 },
+  routingBox: { background: "#fff", border: "1px solid #eee", borderRadius: 6, padding: 12, marginBottom: 12 },
+  routingTitle: { fontWeight: "bold", marginBottom: 6 },
+  routingRow: { fontSize: 13, marginBottom: 6 },
+  ccList: { margin: "6px 0 0 18px", padding: 0, fontSize: 13 },
+  ccEmail: { color: "#333" },
+  muted: { color: "#777" },
+  actions: { display: "flex", gap: 10, marginTop: 10 },
+  smallNote: { marginTop: 10, fontSize: 12, color: "#666" },
 };
