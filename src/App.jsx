@@ -3,17 +3,28 @@ import { useMemo, useState } from "react";
 export default function App() {
   const [fullName, setFullName] = useState("");
   const [description, setDescription] = useState("");
-  const [files, setFiles] = useState([]); // (not sent yet; backend currently expects JSON)
+  const [files, setFiles] = useState([]); // UI only for now
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  // 1) Prefer VITE_API_URL (Render)  2) else same host:5000 (local LAN)
+  /* ---------------- API BASE ----------------
+     Priority:
+     1) VITE_API_URL (Render)
+     2) Render backend hard fallback
+     3) Local dev fallback
+  ------------------------------------------- */
   const API_BASE = useMemo(() => {
-    const fromEnv = (import.meta?.env?.VITE_API_URL || "").trim();
-    if (fromEnv) return fromEnv.replace(/\/+$/, "");
-    const host = window.location.hostname; // e.g. 192.168.0.100
-    return `http://${host}:5000`;
+    const envUrl = (import.meta?.env?.VITE_API_URL || "").trim();
+    if (envUrl) return envUrl.replace(/\/+$/, "");
+
+    // Hard safety fallback (production)
+    if (window.location.hostname.includes("petitiondesk")) {
+      return "https://justicebot-backend-6pzy.onrender.com";
+    }
+
+    // Local dev
+    return "http://localhost:5000";
   }, []);
 
   async function handleSubmit(e) {
@@ -26,7 +37,6 @@ export default function App() {
       const payload = {
         fullName: fullName.trim(),
         description: description.trim(),
-        // optional fields your backend supports:
         email: "",
         phone: "",
         address: "",
@@ -39,7 +49,12 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json().catch(() => ({}));
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error("Backend did not return JSON");
+      }
 
       if (!res.ok || !data?.ok) {
         throw new Error(data?.error || `Server error (${res.status})`);
@@ -49,7 +64,7 @@ export default function App() {
     } catch (err) {
       setError(
         err?.message ||
-          `Failed to fetch. Check backend URL (${API_BASE}) and ensure backend is running.`
+          `Failed to fetch. Backend: ${API_BASE}`
       );
     } finally {
       setLoading(false);
@@ -57,6 +72,27 @@ export default function App() {
   }
 
   const petitionText = result?.petitionText || "";
+
+  /* ---------------- ACTIONS ---------------- */
+  function handleCopy() {
+    navigator.clipboard.writeText(petitionText);
+  }
+
+  function handleEmail() {
+    const subject = encodeURIComponent(result?.subject || "Formal Petition");
+    const body = encodeURIComponent(petitionText);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }
+
+  function handlePDF() {
+    const blob = new Blob([petitionText], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "petition.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div style={styles.page}>
@@ -66,8 +102,8 @@ export default function App() {
       <div style={styles.helpBox}>
         <strong>How to get the best output</strong>
         <ol>
-          <li>Write your complaint like a story: who, what, where, when, how.</li>
-          <li>Include location keywords (e.g. Kubwa, Gombe, Lagos).</li>
+          <li>Write your complaint like a story (who, what, where, when).</li>
+          <li>Include location keywords (e.g. Kubwa, Abuja).</li>
           <li>Be factual and clear.</li>
         </ol>
         <p style={styles.note}>
@@ -101,9 +137,13 @@ export default function App() {
         />
 
         <label style={styles.label}>
-          Upload Evidence (Photos, Videos, Documents) — (UI only for now)
+          Upload Evidence (UI only for now)
         </label>
-        <input type="file" multiple onChange={(e) => setFiles([...e.target.files])} />
+        <input
+          type="file"
+          multiple
+          onChange={(e) => setFiles([...e.target.files])}
+        />
 
         <button type="submit" style={styles.button} disabled={loading}>
           {loading ? "Generating..." : "Generate Petition"}
@@ -119,18 +159,23 @@ export default function App() {
           <div style={styles.meta}>
             <div><b>usedAI:</b> {String(result.usedAI)}</div>
             <div><b>jurisdiction:</b> {result.jurisdiction || "(auto)"}</div>
-            <div><b>inferredState:</b> {result.inferredState || result.inferred_state || "(none)"}</div>
-            <div><b>TO:</b> {result.toOrg || result.routing?.primary?.org || "(none)"}</div>
+            <div><b>inferredState:</b> {result.inferredState || "(none)"}</div>
+            <div><b>TO:</b> {result.toOrg || "(auto-resolved)"}</div>
           </div>
 
           <pre style={styles.pre}>{petitionText}</pre>
 
-          <button
-            style={styles.secondaryButton}
-            onClick={() => navigator.clipboard.writeText(petitionText)}
-          >
-            Copy Petition Text
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button style={styles.secondaryButton} onClick={handleCopy}>
+              Copy Text
+            </button>
+            <button style={styles.secondaryButton} onClick={handleEmail}>
+              Email
+            </button>
+            <button style={styles.secondaryButton} onClick={handlePDF}>
+              Download PDF
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -157,7 +202,11 @@ const styles = {
     borderRadius: 4,
     cursor: "pointer",
   },
-  secondaryButton: { marginTop: 10, padding: 10, fontSize: 14, cursor: "pointer" },
+  secondaryButton: {
+    padding: 10,
+    fontSize: 14,
+    cursor: "pointer",
+  },
   error: { marginTop: 10, color: "red" },
   resultBox: { marginTop: 30, background: "#fafafa", padding: 15, borderRadius: 6 },
   pre: { whiteSpace: "pre-wrap", fontSize: 14 },
