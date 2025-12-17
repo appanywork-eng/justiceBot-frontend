@@ -8,19 +8,11 @@ export default function App() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  // 1) Prefer VITE_API_URL (production) 2) petitiondesk.com fallback 3) local LAN fallback
+  // Backend base (Render preferred, localhost fallback)
   const API_BASE = useMemo(() => {
-    const fromEnv = (import.meta?.env?.VITE_API_URL || "").trim();
+    const fromEnv = import.meta?.env?.VITE_API_URL;
     if (fromEnv) return fromEnv.replace(/\/+$/, "");
-
-    const host = window.location.hostname || "localhost";
-    const isProdDomain = host.includes("petitiondesk.com");
-
-    // If you’re on your public domain and forgot env, fallback to your Render backend seen in screenshots.
-    if (isProdDomain) return "https://justicebot-backend-6pzy.onrender.com";
-
-    // Local dev fallback
-    return `http://${host}:5000`;
+    return "http://localhost:5000";
   }, []);
 
   async function handleSubmit(e) {
@@ -30,12 +22,13 @@ export default function App() {
     setLoading(true);
 
     try {
+      if (!description.trim()) {
+        throw new Error("Please enter your complaint.");
+      }
+
       const payload = {
         fullName: fullName.trim(),
         description: description.trim(),
-        email: "",
-        phone: "",
-        address: "",
         role: "Victim",
       };
 
@@ -45,81 +38,74 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(`Server error (${res.status})`);
+      }
 
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || `Server error (${res.status})`);
+      const data = await res.json();
+
+      if (!data || !data.petitionText) {
+        throw new Error("Invalid response from backend.");
       }
 
       setResult(data);
     } catch (err) {
-      setError(
-        err?.message ||
-          `Failed to fetch. Check backend URL (${API_BASE}) and ensure backend is running.`
-      );
+      setError(err.message || "Failed to generate petition.");
     } finally {
       setLoading(false);
     }
   }
 
+  // ---- Derived safe values ----
   const petitionText = result?.petitionText || "";
-  const subject = result?.subject || "FORMAL COMPLAINT / PETITION";
+  const primary = result?.primaryInstitution || null;
+  const through = result?.throughInstitution || null;
+  const ccList = Array.isArray(result?.ccList) ? result.ccList : [];
 
-  const routingPrimary = result?.routing?.primary || null;
-  const routingThrough = result?.routing?.through || null;
-  const routingCC = Array.isArray(result?.routing?.cc) ? result.routing.cc : [];
+  const subject =
+    primary?.org
+      ? `FORMAL PETITION AGAINST ${primary.org.toUpperCase()}`
+      : "FORMAL PETITION";
 
-  const toEmails = Array.isArray(result?.emailTargets?.to) ? result.emailTargets.to : [];
-  const ccEmails = Array.isArray(result?.emailTargets?.cc) ? result.emailTargets.cc : [];
+  function buildMailto() {
+    const to = encodeURIComponent(primary?.email || "");
+    const cc = encodeURIComponent(
+      ccList.map((c) => c.email).filter(Boolean).join(",")
+    );
+    const sub = encodeURIComponent(subject);
+    const body = encodeURIComponent(petitionText);
 
-  function copyText() {
-    if (!petitionText) return;
-    navigator.clipboard.writeText(petitionText);
+    const parts = [];
+    if (cc) parts.push(`cc=${cc}`);
+    parts.push(`subject=${sub}`);
+    parts.push(`body=${body}`);
+
+    return `mailto:${to}?${parts.join("&")}`;
   }
 
-  function openEmail() {
-    setError("");
-
-    if (!petitionText) {
-      setError("No petition text to email yet.");
+  function handleEmail() {
+    if (!petitionText.trim()) {
+      setError("No petition text available.");
       return;
     }
-
-    // If no TO email exists in directory, we cannot auto-fill recipients.
-    if (!toEmails.length) {
-      setError(
-        "No email address found for the routed 'TO' institution. Add it to institution_directory.json, redeploy backend, then try again."
-      );
-      return;
-    }
-
-    const to = toEmails.join(",");
-    const cc = ccEmails.join(",");
-
-    // mailto URL
-    const params = new URLSearchParams();
-    if (cc) params.set("cc", cc);
-    params.set("subject", subject);
-    params.set("body", petitionText);
-
-    window.location.href = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
+    window.location.href = buildMailto();
   }
 
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>PetitionDesk</h1>
-      <p style={styles.subtitle}>AI-powered legal petition generator</p>
+      <p style={styles.subtitle}>AI-powered legal petition drafting</p>
 
       <div style={styles.helpBox}>
         <strong>How to get the best output</strong>
-        <ol style={{ marginTop: 8 }}>
-          <li>Write your complaint like a story: who, what, where, when, how.</li>
-          <li>Include location keywords (e.g. Kubwa, Gombe, Lagos).</li>
+        <ol>
+          <li>Write your complaint like a story.</li>
+          <li>Include locations (e.g. Kubwa, Lagos).</li>
           <li>Be factual and clear.</li>
         </ol>
         <p style={styles.note}>
-          <b>Note:</b> PetitionDesk drafts formal petitions. Always review before sending.
-          This is not a law firm.
+          <b>Note:</b> PetitionDesk drafts formal petitions. Review before
+          sending. This is not a law firm.
         </p>
         <p style={styles.note}>
           <b>Backend:</b> {API_BASE}
@@ -133,24 +119,25 @@ export default function App() {
           onChange={(e) => setFullName(e.target.value)}
           placeholder="Your full name"
           style={styles.input}
-          required
         />
 
-        <label style={styles.label}>
-          Your Complaint ({description.length} chars)
-        </label>
+        <label style={styles.label}>Your Complaint</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Example: I was arrested and detained in Kubwa, Abuja..."
+          placeholder="Example: I was arrested in Kubwa by police officers..."
           style={styles.textarea}
           required
         />
 
         <label style={styles.label}>
-          Upload Evidence (Photos, Videos, Documents) — (UI only for now)
+          Upload Evidence (Photos, Videos, Documents)
         </label>
-        <input type="file" multiple onChange={(e) => setFiles([...e.target.files])} />
+        <input
+          type="file"
+          multiple
+          onChange={(e) => setFiles([...e.target.files])}
+        />
 
         <button type="submit" style={styles.button} disabled={loading}>
           {loading ? "Generating..." : "Generate Petition"}
@@ -161,65 +148,67 @@ export default function App() {
 
       {result && (
         <div style={styles.resultBox}>
-          <h3 style={{ marginTop: 0 }}>Generated Petition</h3>
-
-          <div style={styles.meta}>
-            <div><b>usedAI:</b> {String(result.usedAI)}</div>
-            <div><b>jurisdiction:</b> {result.jurisdiction || "(auto)"}</div>
-            <div><b>inferredState:</b> {result.inferredState || "(none)"}</div>
-          </div>
+          <h3>Generated Petition</h3>
 
           <div style={styles.routingBox}>
-            <div style={styles.routingTitle}>Routing (resolved)</div>
+            <div style={styles.routingTitle}>Routing</div>
 
             <div style={styles.routingRow}>
               <b>TO:</b>{" "}
-              {routingPrimary?.org || "(none)"}
-              {routingPrimary?.email ? <span> — {routingPrimary.email}</span> : <span style={styles.muted}> — (no email on directory)</span>}
+              {primary ? (
+                <>
+                  {primary.org}{" "}
+                  <span style={styles.muted}>
+                    — {primary.email || "no email"}
+                  </span>
+                </>
+              ) : (
+                <span style={styles.muted}>(none)</span>
+              )}
             </div>
-
-            {routingThrough?.org ? (
-              <div style={styles.routingRow}>
-                <b>THROUGH:</b> {routingThrough.org}
-                {routingThrough.email ? <span> — {routingThrough.email}</span> : <span style={styles.muted}> — (no email)</span>}
-              </div>
-            ) : null}
 
             <div style={styles.routingRow}>
               <b>CC:</b>{" "}
-              {routingCC.length ? "" : "(none)"}
+              {ccList.length ? (
+                <ul style={styles.ccList}>
+                  {ccList.map((c, i) => (
+                    <li key={i}>
+                      {c.org}{" "}
+                      <span style={styles.muted}>
+                        — {c.email || "no email"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span style={styles.muted}>(none)</span>
+              )}
             </div>
 
-            {routingCC.length ? (
-              <ul style={styles.ccList}>
-                {routingCC.map((c, idx) => (
-                  <li key={`${c.org}-${idx}`}>
-                    {c.org}{" "}
-                    {c.email ? (
-                      <span style={styles.ccEmail}>({c.email})</span>
-                    ) : (
-                      <span style={styles.muted}>(no email)</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <div style={styles.helperNote}>
+              If no email appears, you can still copy the text or open a draft
+              email manually.
+            </div>
           </div>
 
           <pre style={styles.pre}>{petitionText}</pre>
 
           <div style={styles.actions}>
-            <button style={styles.secondaryButton} onClick={copyText}>
+            <button
+              style={styles.secondaryButton}
+              onClick={() =>
+                navigator.clipboard.writeText(petitionText || "")
+              }
+            >
               Copy Text
             </button>
 
-            <button style={styles.secondaryButton} onClick={openEmail}>
+            <button
+              style={styles.secondaryButton}
+              onClick={handleEmail}
+            >
               Email
             </button>
-          </div>
-
-          <div style={styles.smallNote}>
-            If “Email” says no TO email, update <b>institution_directory.json</b> with the correct email for that routed institution, redeploy backend, then try again.
           </div>
         </div>
       )}
@@ -228,11 +217,12 @@ export default function App() {
 }
 
 /* ---------------- STYLES ---------------- */
+
 const styles = {
-  page: { maxWidth: 820, margin: "0 auto", padding: 20, fontFamily: "Arial, sans-serif" },
-  title: { textAlign: "center", marginBottom: 5 },
-  subtitle: { textAlign: "center", color: "#555", marginBottom: 20 },
-  helpBox: { background: "#f7f7f7", padding: 15, borderRadius: 6, marginBottom: 20 },
+  page: { maxWidth: 800, margin: "0 auto", padding: 20 },
+  title: { textAlign: "center" },
+  subtitle: { textAlign: "center", color: "#555" },
+  helpBox: { background: "#f7f7f7", padding: 15, marginBottom: 20 },
   note: { fontSize: 13, color: "#555" },
   form: { display: "flex", flexDirection: "column", gap: 10 },
   label: { fontWeight: "bold" },
@@ -244,27 +234,21 @@ const styles = {
     background: "#003366",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
     cursor: "pointer",
-  },
-  secondaryButton: {
-    padding: 10,
-    fontSize: 14,
-    cursor: "pointer",
-    borderRadius: 6,
-    border: "1px solid #ccc",
-    background: "#fff",
   },
   error: { marginTop: 10, color: "red" },
-  resultBox: { marginTop: 30, background: "#fafafa", padding: 15, borderRadius: 6 },
-  pre: { whiteSpace: "pre-wrap", fontSize: 14, background: "#fff", padding: 12, borderRadius: 6, border: "1px solid #eee" },
-  meta: { fontSize: 13, color: "#333", marginBottom: 10, display: "grid", gap: 4 },
-  routingBox: { background: "#fff", border: "1px solid #eee", borderRadius: 6, padding: 12, marginBottom: 12 },
+  resultBox: { marginTop: 30, background: "#fafafa", padding: 15 },
+  pre: { whiteSpace: "pre-wrap", fontSize: 14 },
+  actions: { display: "flex", gap: 10, marginTop: 10 },
+  secondaryButton: { padding: 10, cursor: "pointer" },
+  routingBox: { background: "#fff", padding: 10, marginBottom: 10 },
   routingTitle: { fontWeight: "bold", marginBottom: 6 },
   routingRow: { fontSize: 13, marginBottom: 6 },
-  ccList: { margin: "6px 0 0 18px", padding: 0, fontSize: 13 },
-  ccEmail: { color: "#333" },
+  ccList: { margin: "6px 0 6px 18px" },
   muted: { color: "#777" },
-  actions: { display: "flex", gap: 10, marginTop: 10 },
-  smallNote: { marginTop: 10, fontSize: 12, color: "#666" },
+  helperNote: { marginTop: 8, fontSize: 13, color: "#555" },
 };
+
+
+
+
