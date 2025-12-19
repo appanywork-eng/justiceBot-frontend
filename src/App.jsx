@@ -7,12 +7,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  // Prefer Render env, fallback local
-  const API_BASE = useMemo(() => {
-    const fromEnv = import.meta.env.VITE_API_URL;
-    if (fromEnv) return fromEnv.replace(/\/+$/, "");
-    return "http://localhost:5000";
-  }, []);
+  // ✅ HARD-LOCK backend URL (NO guessing, NO env bugs)
+  const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -23,33 +19,35 @@ export default function App() {
     try {
       const payload = {
         fullName: fullName.trim(),
-        description: description.trim(),
+        complaint: description.trim(),
+        mode: "A"
       };
 
-      const res = await fetch(`${API_BASE}/generate-petition`, {
+      const res = await fetch(`${API_BASE}/api/generate-petition`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error("Server error. Please try again.");
+        throw new Error(data.error || "Server error");
       }
 
       setResult(data);
     } catch (err) {
-      setError(err.message || "Failed to connect to backend.");
+      setError(err.message || "Failed to fetch");
     } finally {
       setLoading(false);
     }
   }
 
-  const petitionText = result?.petitionText || "";
-  const primary = result?.primaryInstitution || null;
-  const through = result?.throughInstitution || null;
-  const ccList = Array.isArray(result?.ccList) ? result.ccList : [];
+  const petitionText = result?.petitionDraft || "";
+  const primary = result?.routing?.[0] || null;
+  const ccList = Array.isArray(result?.routing?.[1]) ? result.routing[1] : [];
 
   function handleEmail() {
     if (!petitionText.trim()) {
@@ -59,9 +57,9 @@ export default function App() {
 
     const to = encodeURIComponent(primary?.email || "");
     const cc = encodeURIComponent(
-      ccList.map((c) => c.email).filter(Boolean).join(",")
+      ccList.map(c => c.email).filter(Boolean).join(",")
     );
-    const subject = encodeURIComponent("FORMAL PETITION");
+    const subject = encodeURIComponent("FORMAL PETITION / COMPLAINT");
     const body = encodeURIComponent(petitionText);
 
     window.location.href = `mailto:${to}?cc=${cc}&subject=${subject}&body=${body}`;
@@ -89,7 +87,7 @@ export default function App() {
         <label style={styles.label}>Full Name</label>
         <input
           value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
+          onChange={e => setFullName(e.target.value)}
           placeholder="Your full name"
           style={styles.input}
           required
@@ -98,13 +96,13 @@ export default function App() {
         <label style={styles.label}>Your Complaint</label>
         <textarea
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Example: I was arrested in Kubwa Abuja yesterday..."
+          onChange={e => setDescription(e.target.value)}
+          placeholder="Example: AEDC disconnected my electricity in Kubwa without notice"
           style={styles.textarea}
           required
         />
 
-        <button type="submit" style={styles.button} disabled={loading}>
+        <button type="submit" style={styles.button}>
           {loading ? "Generating..." : "Generate Petition"}
         </button>
 
@@ -113,33 +111,6 @@ export default function App() {
 
       {result && (
         <div style={styles.resultBox}>
-          <h3>Routing</h3>
-
-          <p>
-            <b>TO:</b>{" "}
-            {primary ? `${primary.org} (${primary.email || "no email"})` : "—"}
-          </p>
-
-          <p>
-            <b>THROUGH:</b>{" "}
-            {through ? `${through.org} (${through.email || "no email"})` : "—"}
-          </p>
-
-          <p>
-            <b>CC:</b>
-          </p>
-          {ccList.length ? (
-            <ul>
-              {ccList.map((c, i) => (
-                <li key={i}>
-                  {c.org} ({c.email || "no email"})
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>(none)</p>
-          )}
-
           <pre style={styles.pre}>{petitionText}</pre>
 
           <div style={styles.actions}>
@@ -177,11 +148,11 @@ const styles = {
     background: "#003366",
     color: "#fff",
     border: "none",
-    cursor: "pointer",
+    cursor: "pointer"
   },
   error: { color: "red", marginTop: 10 },
   resultBox: { marginTop: 30, background: "#fafafa", padding: 15 },
   pre: { whiteSpace: "pre-wrap", fontSize: 14 },
   actions: { display: "flex", gap: 10, marginTop: 10 },
-  secondaryButton: { padding: 10, cursor: "pointer" },
+  secondaryButton: { padding: 10, cursor: "pointer" }
 };
