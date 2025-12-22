@@ -2,15 +2,17 @@ import { useState } from "react";
 
 export default function App() {
   const [fullName, setFullName] = useState("");
+  const [address, setAddress] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [location, setLocation] = useState("Nigeria");
   const [description, setDescription] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [petitionText, setPetitionText] = useState("");
   const [route, setRoute] = useState(null);
 
-  // IMPORTANT:
-  // Your backend endpoint should be: POST /api/petition
-  // This is the Render service base URL:
   const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
   async function handleSubmit(e) {
@@ -23,83 +25,56 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/petition`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName: fullName.trim(),
-          complaint: description.trim(),
-          location: "Nigeria"
+          address: address.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          location: location.trim() || "Nigeria",
+          complaint: description.trim()
         })
       });
 
-      // SAFEST parsing: read text first, then JSON parse
-      const rawText = await res.text();
-      let data = null;
+      const data = await res.json();
 
-      try {
-        data = JSON.parse(rawText);
-      } catch (parseErr) {
-        // If we got HTML, it will start with <!DOCTYPE
-        throw new Error(
-          "Server did not return JSON. (Wrong endpoint or backend returned HTML). First part: " +
-          rawText.slice(0, 80)
-        );
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Server error");
       }
 
-      console.log("FRONTEND RESPONSE:", data);
-
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error || "Server error");
-      }
-
-      if (!data.petition) {
-        throw new Error("No petition returned from server");
-      }
-
-      setPetitionText(data.petition);
       setRoute(data.route || null);
+      setPetitionText(data.petition || "");
 
     } catch (err) {
-      setError(err?.message || "Failed to generate petition");
+      setError(err.message || "Failed to generate petition");
     } finally {
       setLoading(false);
     }
   }
 
-  function buildHeaderBlock() {
-    if (!route) return "";
-
-    const toLine =
-      route?.to?.name
-        ? `${route.to.name}${route.to.email ? ` <${route.to.email}>` : ""}`
-        : "";
-
-    const ccLines = Array.isArray(route?.cc)
-      ? route.cc.map(x => `${x.name}${x.email ? ` <${x.email}>` : ""}`)
-      : [];
-
-    return [
-      "TO:",
-      toLine || "(not set)",
-      "",
-      "CC:",
-      ccLines.length ? ccLines.join("\n") : "(none)",
-      "",
-      "----------------------------------------",
-      ""
-    ].join("\n");
-  }
-
   function handleEmail() {
     if (!petitionText) return;
 
-    const subject = encodeURIComponent("Formal Petition");
-    const header = buildHeaderBlock();
-    const body = encodeURIComponent(header + petitionText);
+    const to = encodeURIComponent((route?.emailPack?.to || []).join(","));
+    const cc = encodeURIComponent((route?.emailPack?.cc || []).join(","));
+    const subject = encodeURIComponent("Formal Petition / Request for Redress");
+    const body = encodeURIComponent(petitionText);
 
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${to}?cc=${cc}&subject=${subject}&body=${body}`;
+  }
+
+  function handleEvidence() {
+    document.getElementById("evidenceInput")?.click();
+  }
+
+  function handleDownload() {
+    const blob = new Blob([petitionText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "petition.txt";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -108,18 +83,22 @@ export default function App() {
 
       <form onSubmit={handleSubmit} style={styles.form}>
         <label>Full Name</label>
-        <input
-          value={fullName}
-          onChange={e => setFullName(e.target.value)}
-          required
-        />
+        <input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+
+        <label>Address</label>
+        <input value={address} onChange={(e) => setAddress(e.target.value)} />
+
+        <label>Email</label>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} />
+
+        <label>Phone</label>
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+
+        <label>Location</label>
+        <input value={location} onChange={(e) => setLocation(e.target.value)} />
 
         <label>Your Complaint</label>
-        <textarea
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          required
-        />
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
 
         <button type="submit" disabled={loading}>
           {loading ? "Generating..." : "Generate Petition"}
@@ -128,41 +107,34 @@ export default function App() {
         {error && <div style={styles.error}>{error}</div>}
       </form>
 
-      {(petitionText || route) && (
+      {petitionText && (
         <div style={styles.resultBox}>
-          {/* Show TO/CC properly (no [object Object]) */}
-          {route && (
-            <div style={styles.routeBox}>
-              <div><b>TO:</b> {route?.to?.name ? `${route.to.name}${route.to.email ? ` (${route.to.email})` : ""}` : "Not set"}</div>
-              <div style={{ marginTop: 6 }}>
-                <b>CC:</b>
-                <div style={{ marginTop: 4 }}>
-                  {Array.isArray(route?.cc) && route.cc.length ? (
-                    <ul style={styles.ccList}>
-                      {route.cc.map((x, idx) => (
-                        <li key={idx}>
-                          {x.name}{x.email ? ` (${x.email})` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div>None</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          <div style={styles.routeBox}>
+            <div><b>Sector:</b> {route?.sector || "Unknown"}</div>
+            <div><b>TO:</b> {(route?.emailPack?.to || []).join(", ") || "None"}</div>
+            <div><b>CC:</b> {(route?.emailPack?.cc || []).join(", ") || "None"}</div>
+          </div>
 
-          {petitionText && (
-            <pre style={styles.petitionText}>
-              {petitionText}
-            </pre>
-          )}
+          <pre
+            style={styles.lockedText}
+            onCopy={(e) => e.preventDefault()}
+            onCut={(e) => e.preventDefault()}
+          >
+            {petitionText}
+          </pre>
+
+          <input
+            id="evidenceInput"
+            type="file"
+            style={{ display: "none" }}
+            multiple
+            accept="image/*,video/*,.pdf,.doc,.docx"
+          />
 
           <div style={styles.actions}>
-            <button onClick={handleEmail} disabled={!petitionText}>
-              Send to Email
-            </button>
+            <button onClick={handleEmail}>Send Email</button>
+            <button type="button" onClick={handleEvidence}>Evidence</button>
+            <button type="button" onClick={handleDownload}>Download</button>
           </div>
         </div>
       )}
@@ -171,19 +143,18 @@ export default function App() {
 }
 
 const styles = {
-  page: { maxWidth: 800, margin: "0 auto", padding: 20 },
+  page: { maxWidth: 900, margin: "0 auto", padding: 20 },
   title: { textAlign: "center" },
   form: { display: "flex", flexDirection: "column", gap: 12 },
-  error: { color: "red", marginTop: 8 },
-  resultBox: { marginTop: 30, background: "#fafafa", padding: 15, borderRadius: 8 },
-  routeBox: { background: "#fff", padding: 12, borderRadius: 8, marginBottom: 12, border: "1px solid #eee" },
-  ccList: { margin: 0, paddingLeft: 18 },
-  petitionText: {
+  error: { color: "red" },
+  resultBox: { marginTop: 30, background: "#fafafa", padding: 15 },
+  routeBox: { background: "#fff", padding: 10, marginBottom: 10 },
+  lockedText: {
+    userSelect: "none",
     whiteSpace: "pre-wrap",
     background: "#fff",
     padding: 12,
-    borderRadius: 8,
-    border: "1px solid #eee"
+    minHeight: 260
   },
-  actions: { marginTop: 10, display: "flex", gap: 10 }
+  actions: { display: "flex", gap: 10, marginTop: 10 }
 };
