@@ -2,38 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>PetitionDesk</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: Arial, sans-serif; padding: 16px; }
-    textarea, input { width: 100%; margin-bottom: 12px; padding: 10px; }
-    button { padding: 12px; width: 100%; font-size: 16px; }
-    #output { height: 300px; }
-    .note { font-size: 12px; color: #555; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JusticeBot</title>
 </head>
 <body>
-
-<h2>PetitionDesk</h2>
-
-<p class="note">
-Write your complaint like a story. Include location. Be factual.
-</p>
-
-<input id="fullName" placeholder="Full Name" />
-
-<textarea id="complaint" rows="6" placeholder="Describe your complaint..."></textarea>
-
-<label><strong>Upload Evidence (Photo / Video)</strong></label>
-<input type="file" id="evidence" accept="image/*,video/*" multiple />
-
-<button onclick="generatePetition()">Generate Petition</button>
-
-<h3>Generated Petition</h3>
-<textarea id="output" readonly></textarea>
-
-<button onclick="emailPetition()">Email Petition</button>
-
-<script src="app.js"></script>
+  <div id="root"></div>
+  <script type="module" src="/main.jsx"></script>
 </body>
 </html>

@@ -1,0 +1,224 @@
+import { useState } from "react";
+
+const EVIDENCE_OPTIONS = [
+  "Receipts / Proof of Payment",
+  "Tickets / Booking References",
+  "Screenshots / Messages / Emails",
+  "Photos / Videos / Recordings",
+  "Official Letters / Responses",
+  "Witness Statements / Contacts"
+];
+
+export default function App() {
+  const [fullName, setFullName] = useState("");
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [petitionText, setPetitionText] = useState("");
+  const [route, setRoute] = useState(null);
+  const [evidence, setEvidence] = useState([]);
+
+  const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setPetitionText("");
+    setRoute(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/petition`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          complaint: description.trim(),
+          location: "Nigeria"
+        })
+      });
+
+      const rawText = await res.text();
+      let data;
+
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(
+          "Server did not return JSON. Response starts with: " +
+          rawText.slice(0, 80)
+        );
+      }
+
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || "Server error");
+      }
+
+      if (!data.petition) {
+        throw new Error("No petition returned from server");
+      }
+
+      setPetitionText(data.petition);
+      setRoute(data.route || null);
+    } catch (err) {
+      setError(err.message || "Failed to generate petition");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function buildHeaderBlock() {
+    if (!route) return "";
+
+    const toLine = route.to?.name
+      ? `${route.to.name}${route.to.email ? ` <${route.to.email}>` : ""}`
+      : "(not set)";
+
+    const ccLines = Array.isArray(route.cc)
+      ? route.cc.map(x =>
+          `${x.name}${x.email ? ` <${x.email}>` : ""}`
+        )
+      : [];
+
+    return [
+      "TO:",
+      toLine,
+      "",
+      "CC:",
+      ccLines.length ? ccLines.join("\n") : "(none)",
+      "",
+      "------------------------------------",
+      ""
+    ].join("\n");
+  }
+
+  function handleEmail() {
+    if (!petitionText) return;
+
+    const header = buildHeaderBlock();
+
+    const evidenceNote =
+      evidence.length > 0
+        ? "\n\n------------------------------------\n" +
+          "EVIDENCE TO BE ATTACHED BY PETITIONER\n" +
+          "------------------------------------\n" +
+          evidence.map(e => `- ${e}`).join("\n") +
+          "\n\n(Attachments included manually with this email.)\n"
+        : "";
+
+    const subject = encodeURIComponent("Formal Petition / Complaint");
+    const body = encodeURIComponent(header + petitionText + evidenceNote);
+
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }
+
+  return (
+    <div style={styles.page}>
+      <h1 style={styles.title}>PetitionDesk</h1>
+
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <label>Full Name</label>
+        <input
+          value={fullName}
+          onChange={e => setFullName(e.target.value)}
+          required
+        />
+
+        <label>Your Complaint</label>
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          required
+        />
+
+        <div style={styles.evidenceBox}>
+          <b>Evidence Available (optional)</b>
+          {EVIDENCE_OPTIONS.map((item, idx) => (
+            <label key={idx} style={styles.evidenceItem}>
+              <input
+                type="checkbox"
+                checked={evidence.includes(item)}
+                onChange={() =>
+                  setEvidence(prev =>
+                    prev.includes(item)
+                      ? prev.filter(x => x !== item)
+                      : [...prev, item]
+                  )
+                }
+              />{" "}
+              {item}
+            </label>
+          ))}
+        </div>
+
+        <button type="submit" disabled={loading}>
+          {loading ? "Generating..." : "Generate Petition"}
+        </button>
+
+        {error && <div style={styles.error}>{error}</div>}
+      </form>
+
+      {route && (
+        <div style={styles.routeBox}>
+          <b>TO:</b> {route.to?.name || "—"}
+          <div style={{ marginTop: 6 }}>
+            <b>CC:</b>
+            <ul style={styles.ccList}>
+              {Array.isArray(route.cc) && route.cc.length > 0
+                ? route.cc.map((x, idx) => (
+                    <li key={idx}>
+                      {x.name}
+                      {x.email ? ` (${x.email})` : ""}
+                    </li>
+                  ))
+                : <li>None</li>}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {petitionText && (
+        <pre style={styles.petitionText}>{petitionText}</pre>
+      )}
+
+      <div style={styles.actions}>
+        <button onClick={handleEmail} disabled={!petitionText}>
+          Send to Email
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  page: { maxWidth: 800, margin: "0 auto", padding: 20 },
+  title: { textAlign: "center" },
+  form: { display: "flex", flexDirection: "column", gap: 12 },
+  error: { color: "red" },
+  evidenceBox: {
+    border: "1px solid #ddd",
+    padding: 10,
+    borderRadius: 8
+  },
+  evidenceItem: { display: "block", marginTop: 6 },
+  routeBox: {
+    marginTop: 20,
+    background: "#fff",
+    padding: 12,
+    borderRadius: 8,
+    border: "1px solid #eee"
+  },
+  ccList: { margin: 0, paddingLeft: 18 },
+  petitionText: {
+    marginTop: 20,
+    whiteSpace: "pre-wrap",
+    background: "#fff",
+    padding: 12,
+    borderRadius: 8,
+    border: "1px solid #eee"
+  },
+  actions: { marginTop: 10 }
+};

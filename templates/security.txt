@@ -1,0 +1,32 @@
+PETITION TEMPLATE — SECURITY SECTOR
+
+To:
+The Inspector-General of Police,
+Nigeria Police Force Headquarters,
+Nigeria.
+
+Through:
+The Hon. Attorney-General of the Federation,
+Federal Ministry of Justice,
+Abuja, Nigeria.
+
+CC:
+Chairman, Police Service Commission (PSC), Abuja
+Chief of Defence Staff, Nigerian Armed Forces HQ, Abuja
+Commandant-General, Nigeria Security and Civil Defence Corps (NSCDC), Abuja
+Controller-General, Nigerian Correctional Service (Prisons), Abuja
+All Security Sector Watchdogs, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Sir/Ma,
+
+This petition addresses grievances in the Nigerian security sector including but not limited to unlawful arrest, abuse of power, threats, regulatory breaches, or institutional misconduct. The petitioner will provide the complaint narrative via the app.
+
+Reliefs sought:
+1. Immediate investigation into the matter
+2. Enforcement of accountability
+3. Protection of civil and constitutional rights
+4. Institutional redress
+5. Prevention of recurrence
+
+Yours faithfully,
+[PETITIONER_DETAILS]

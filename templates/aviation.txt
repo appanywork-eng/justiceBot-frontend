@@ -1,0 +1,30 @@
+PETITION TEMPLATE — AVIATION SECTOR
+
+To:
+The Hon. Minister,
+Federal Ministry of Aviation and Aerospace Development,
+Abuja, Nigeria.
+
+Through:
+The Director-General,
+Nigerian Civil Aviation Authority (NCAA),
+Abuja, Nigeria.
+
+CC:
+Managing Director, Federal Airports Authority of Nigeria (FAAN), Abuja
+Commissioner, Accident Investigation Bureau (AIB), Abuja
+All Aviation Parastatals, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Sir/Ma,
+
+This petition concerns an aviation-sector grievance requiring policy review, regulatory compliance, enforcement action, and institutional accountability. The detailed complaint narrative shall be provided by the petitioner via the app interface.
+
+Reliefs sought:
+1. Regulatory review and enforcement
+2. Institutional investigation where applicable
+3. Consumer rights protection
+4. Policy compliance and redress
+5. Prevention of recurrence
+
+Yours faithfully,
+[PETITIONER_DETAILS]

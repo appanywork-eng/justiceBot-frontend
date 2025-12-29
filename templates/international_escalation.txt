@@ -1,0 +1,29 @@
+PETITION TEMPLATE — INTERNATIONAL ESCALATION
+
+To:
+Relevant International Oversight Institution,
+USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Through:
+Nigeria Public Complaints Commission (PCC),
+Abuja, Nigeria.
+
+CC:
+African Union Peace & Security Department
+ECOWAS Commission
+African Commission on Human & Peoples’ Rights
+All Relevant International Watchdogs, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Sir/Ma,
+
+This petition concerns a grievance requiring escalation beyond Nigeria, including cross-border institutional breach, human rights violations, or regulatory failure. The petitioner will supply the complaint narrative through the app interface.
+
+Reliefs sought:
+1. International institutional review
+2. Diplomatic or multilateral intervention where applicable
+3. Protection of rights
+4. Enforcement of accountability
+5. Prevention of recurrence
+
+Yours faithfully,
+[PETITIONER_DETAILS]

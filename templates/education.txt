@@ -1,0 +1,33 @@
+PETITION TEMPLATE — EDUCATION SECTOR
+
+To:
+The Hon. Minister,
+Federal Ministry of Education,
+Abuja, Nigeria.
+
+Through:
+The Executive Secretary,
+National Universities Commission (NUC),
+Abuja, Nigeria.
+
+CC:
+Executive Secretary, National Board for Technical Education (NBTE), Kaduna
+Executive Secretary, National Commission for Colleges of Education (NCCE), Abuja
+Executive Secretary, Universal Basic Education Commission (UBEC), Abuja
+Director-General, Federal Competition and Consumer Protection Commission (FCCPC), Abuja
+Chief Commissioner, Public Complaints Commission (PCC), Abuja
+All Relevant Education Agencies/Watchdogs, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Sir/Ma,
+
+This petition concerns an education-sector grievance involving possible administrative misconduct, denial of academic rights, admissions or certification disputes, unfair disciplinary actions, regulatory breaches, or other institutional failures. The full complaint narrative and supporting details shall be provided by the petitioner via the app interface.
+
+Reliefs sought:
+1. Immediate review of the complaint and supporting materials
+2. Investigation into any institutional misconduct or regulatory breaches
+3. Enforcement of applicable education regulations and standards
+4. Provision of appropriate redress/remedy to the petitioner where justified
+5. Institutional reforms or directives to prevent recurrence
+
+Yours faithfully,
+[PETITIONER_DETAILS]

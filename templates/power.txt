@@ -1,0 +1,31 @@
+PETITION TEMPLATE — POWER SECTOR
+
+To:
+The Hon. Minister,
+Federal Ministry of Power,
+Abuja, Nigeria.
+
+Through:
+The Chairman,
+Nigerian Electricity Regulatory Commission (NERC),
+Abuja, Nigeria.
+
+CC:
+Managing Director, Affected DISCO HQ, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+Director-General, NERC, Abuja
+All Power Sector Watchdogs, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Sir/Ma,
+
+This petition addresses grievances in the Nigerian power sector including but not limited to unlawful disconnection, tariff disputes, metering issues, or regulatory breaches. The petitioner will provide the complaint narrative via the app.
+
+Reliefs sought:
+1. Sector policy review
+2. Regulatory enforcement
+3. Institutional investigation
+4. Accountability for any violations
+5. Consumer rights protection
+6. Prevention of recurrence
+
+Yours faithfully,
+[PETITIONER_DETAILS]

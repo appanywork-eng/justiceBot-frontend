@@ -1,0 +1,33 @@
+PETITION TEMPLATE — BANKING SECTOR
+
+To:
+The Governor,
+Central Bank of Nigeria (CBN),
+Abuja, Nigeria.
+
+Through:
+The Director,
+Financial Policy and Regulation Department,
+Central Bank of Nigeria (CBN),
+Abuja, Nigeria.
+
+CC:
+Chairman, Police Service Commission (for enforcement if criminality is suspected), Abuja
+Director-General, Federal Competition and Consumer Protection Commission (FCCPC), Abuja
+CEO/MD of Affected Bank HQ, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+All Banking Regulators and Watchdogs, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Sir/Ma,
+
+This petition relates to unlawful or disputed financial transactions, regulatory breach, or consumer rights violations in the Nigerian banking sector. The petitioner will provide the complaint narrative through the app.
+
+Reliefs sought:
+1. Regulatory review
+2. Transaction reversal or remedy where justified
+3. Institutional investigation into systemic breaches
+4. Enforcement of CBN oversight powers
+5. Consumer rights protection
+6. Prevention of recurrence
+
+Yours faithfully,
+[PETITIONER_DETAILS]

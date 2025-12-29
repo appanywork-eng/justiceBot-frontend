@@ -1,0 +1,31 @@
+PETITION TEMPLATE — TELECOMS SECTOR
+
+To:
+The Executive Vice-Chairman,
+Nigerian Communications Commission (NCC),
+Abuja, Nigeria.
+
+Through:
+The Director,
+Consumer Affairs Bureau,
+Nigerian Communications Commission (NCC),
+Abuja, Nigeria.
+
+CC:
+CEO/MD of Affected Telecom Operator HQ, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+Director-General, FCCPC, Abuja
+All Telecom Sector Watchdogs, USE_DYNAMIC_LOOKUP_FROM_OFFICIAL_SITE
+
+Sir/Ma,
+
+This petition concerns grievances in the Nigerian telecoms sector including unlawful SIM actions, data disputes, service fraud, or regulatory breach. The complaint narrative will be provided through the app.
+
+Reliefs sought:
+1. Regulatory review
+2. Consumer rights enforcement
+3. Institutional investigation
+4. Sanctions or remedies where justified
+5. Prevention of recurrence
+
+Yours faithfully,
+[PETITIONER_DETAILS]
