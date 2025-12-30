@@ -7,16 +7,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["pwa-192.png", "pwa-512.png", "pwa-512-maskable.png"],
-
+      devOptions: { enabled: true }, // lets you test PWA locally
       manifest: {
         name: "PetitionDesk",
         short_name: "PetitionDesk",
+        description: "AI-assisted petition and complaint letter generator",
         start_url: "/",
         scope: "/",
         display: "standalone",
         background_color: "#ffffff",
-        theme_color: "#ffffff",
+        theme_color: "#0a5c36",
         icons: [
           { src: "/pwa-192.png", sizes: "192x192", type: "image/png" },
           { src: "/pwa-512.png", sizes: "512x512", type: "image/png" },
@@ -28,18 +28,6 @@ export default defineConfig({
           },
         ],
       },
-
-      // KEY FIX: stop Workbox from terser-minifying the SW on Termux
-      workbox: {
-        mode: "development",
-        cleanupOutdatedCaches: true,
-        navigateFallback: "/index.html",
-      },
     }),
   ],
-
-  // Keep Vite build minifier stable too
-  build: {
-    minify: "esbuild",
-  },
 });

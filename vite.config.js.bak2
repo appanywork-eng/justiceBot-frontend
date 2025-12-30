@@ -7,8 +7,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["pwa-192.png", "pwa-512.png", "pwa-512-maskable.png"],
-
+      includeAssets: [
+        "pwa-192.png",
+        "pwa-512.png",
+        "pwa-512-maskable.png",
+      ],
       manifest: {
         name: "PetitionDesk",
         short_name: "PetitionDesk",
@@ -28,17 +31,14 @@ export default defineConfig({
           },
         ],
       },
-
-      // KEY FIX: stop Workbox from terser-minifying the SW on Termux
       workbox: {
-        mode: "development",
         cleanupOutdatedCaches: true,
         navigateFallback: "/index.html",
       },
     }),
   ],
 
-  // Keep Vite build minifier stable too
+  // IMPORTANT: avoid terser on Termux/Android (causes your exact crash)
   build: {
     minify: "esbuild",
   },
