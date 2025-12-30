@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
 
@@ -48,12 +49,12 @@ export default function App() {
       setSector(detected);
 
       if (detected === "unknown") {
-        setPetition("❌ Sector not recognized.");
+        setPetition("✗ Sector not recognized.");
         setLoading(false);
         return;
       }
 
-      // 2) generate petition (send petitioner details so petition body is correct)
+      // 2) generate petition (send petitioner details so petition has identity lines)
       const pRes = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,7 +71,7 @@ export default function App() {
       });
 
       const pData = await pRes.json();
-      const petitionText = (pData.petition || "❌ Failed to generate petition.").trim();
+      const petitionText = pData.petition || "✗ Failed to generate petition.";
       setPetition(petitionText);
 
       // 3) get routing that matches petition mentions
@@ -96,7 +97,7 @@ export default function App() {
       });
     } catch (err) {
       console.error(err);
-      setPetition("❌ Error connecting to backend.");
+      setPetition("✗ Error connecting to backend.");
     }
 
     setLoading(false);
@@ -104,7 +105,9 @@ export default function App() {
 
   function handleSendEmail() {
     if (!routing.mailto) {
-      alert("❌ No verified emails found for routing. Fix sector JSON emails or enable Google CSE env vars.");
+      alert(
+        "✗ No verified emails found for routing. Fix sector JSON emails or enable Google CSE env vars."
+      );
       return;
     }
     window.location.href = routing.mailto;
@@ -117,10 +120,10 @@ export default function App() {
     }
 
     try {
-      const url = `${API_BASE}/download-pdf?sector=${encodeURIComponent(sector)}&text=${encodeURIComponent(petition)}`;
+      const url = `${API_BASE}/download-pdf?sector=${encodeURIComponent(sector)}`;
       const res = await fetch(url);
       if (!res.ok) {
-        alert("❌ PDF generation failed.");
+        alert("✗ PDF generation failed.");
         return;
       }
 
@@ -136,115 +139,169 @@ export default function App() {
 
       window.URL.revokeObjectURL(fileUrl);
     } catch (err) {
-      alert("❌ Error downloading PDF.");
+      alert("✗ Error downloading PDF.");
       console.error(err);
     }
   }
 
   return (
-    <div style={{ padding: 20, fontFamily: "Arial", maxWidth: 760, margin: "0 auto" }}>
-      <h2 style={{ textAlign: "center", marginBottom: 14 }}>PetitionDesk — Legal Protest Generator</h2>
+    <div className="page">
+      <div className="card">
+        {/* ===== New Premium Header ===== */}
+        <header className="pd-header">
+          <div className="pd-header__inner">
+            <div className="pd-brand">
+              <div className="pd-logo" aria-hidden="true">
+                PD
+              </div>
 
-      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
-        <input placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        <input placeholder="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
-        <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-      </div>
-
-      <textarea
-        placeholder="Enter your complaint..."
-        value={complaint}
-        onChange={(e) => setComplaint(e.target.value)}
-        style={{
-          width: "100%",
-          height: 140,
-          marginBottom: 10,
-          padding: 12,
-          borderRadius: 6,
-          border: "1px solid #ccc",
-          fontSize: 15,
-          resize: "vertical",
-        }}
-      />
-
-      <label style={{ fontSize: 12, cursor: "pointer", display: "inline-block", marginBottom: 12 }}>
-        📎 Evidence{" "}
-        <input type="file" onChange={(e) => setEvidence(e.target.files?.[0] || null)} />
-      </label>
-
-      <button
-        onClick={handleGenerate}
-        disabled={loading}
-        style={{
-          width: "100%",
-          background: "#0a7",
-          color: "#fff",
-          padding: "10px 14px",
-          fontSize: 16,
-          borderRadius: 6,
-          cursor: "pointer",
-          border: "none",
-        }}
-      >
-        {loading ? "Generating..." : "Generate Petition"}
-      </button>
-
-      <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 12 }}>
-        <button onClick={handleSendEmail} style={{ padding: "10px 14px" }}>
-          Send Email
-        </button>
-        <button onClick={handleDownloadPDF} style={{ padding: "10px 14px" }}>
-          Download PDF
-        </button>
-      </div>
-
-      {sector && sector !== "unknown" && (
-        <div style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-          <div style={{ fontSize: 14 }}>
-            <strong>Detected sector:</strong> {sector}
-          </div>
-
-          <div style={{ marginTop: 10, fontSize: 13 }}>
-            <strong>Email Subject:</strong> {routing.subject || "—"}
-          </div>
-
-          {routing.truncated?.to || routing.truncated?.cc ? (
-            <div style={{ fontSize: 12, color: "#a00", marginTop: 8 }}>
-              ⚠️ Mail client limit: only the first 10 recipients are inserted automatically. Add remaining manually if needed.
+              <div className="pd-titleWrap">
+                <h1 className="pd-title">PetitionDesk</h1>
+                <p className="pd-subtitle">Legal AI Petition Generator</p>
+              </div>
             </div>
-          ) : null}
 
-          <div style={{ marginTop: 10, fontSize: 12 }}>
-            <strong>Mentioned institutions (used for routing):</strong>{" "}
-            {routing.mentionedInstitutions?.length ? routing.mentionedInstitutions.join(" | ") : "—"}
+            <div className="pd-badge" title="AI-assisted drafting tool">
+              AI-Assisted
+            </div>
           </div>
+        </header>
 
-          <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
-            <div><strong>TO:</strong> {routing.to?.length ? routing.to.join(", ") : "—"}</div>
-            <div style={{ marginTop: 6 }}><strong>CC:</strong> {routing.cc?.length ? routing.cc.join(", ") : "—"}</div>
+        {/* ===== Moving Disclaimer (slow ticker) ===== */}
+        <div className="pd-disclaimer" role="note" aria-label="Disclaimer">
+          <div
+            className="pd-disclaimer__fade pd-disclaimer__fade--left"
+            aria-hidden="true"
+          />
+          <div
+            className="pd-disclaimer__fade pd-disclaimer__fade--right"
+            aria-hidden="true"
+          />
+
+          <div className="pd-disclaimer__track">
+            <span className="pd-disclaimer__item">
+              Disclaimer: PetitionDesk is an AI-assisted writing tool that helps
+              users draft petitions and complaint letters. It does NOT provide
+              legal advice, does NOT represent any user, and does NOT guarantee
+              outcomes or delivery. Users are solely responsible for verifying
+              facts, attachments, recipient details, and compliance with
+              applicable laws. Do not submit false, defamatory, threatening, or
+              unlawful content. For urgent or high-stakes matters, consult a
+              qualified lawyer.
+            </span>
+
+            {/* repeat once for seamless scroll */}
+            <span className="pd-disclaimer__item" aria-hidden="true">
+              Disclaimer: PetitionDesk is an AI-assisted writing tool that helps
+              users draft petitions and complaint letters. It does NOT provide
+              legal advice, does NOT represent any user, and does NOT guarantee
+              outcomes or delivery. Users are solely responsible for verifying
+              facts, attachments, recipient details, and compliance with
+              applicable laws. Do not submit false, defamatory, threatening, or
+              unlawful content. For urgent or high-stakes matters, consult a
+              qualified lawyer.
+            </span>
           </div>
         </div>
-      )}
 
-      <pre
-        style={{
-          background: "#f8f8f8",
-          padding: 18,
-          borderRadius: 6,
-          border: "1px solid #ddd",
-          whiteSpace: "pre-wrap",
-          minHeight: 220,
-          marginTop: 16,
-          fontSize: 14,
-          lineHeight: 1.6,
-          textAlign: "left",
-        }}
-      >
-        {petition}
-      </pre>
+        {/* ===== Form ===== */}
+        <div className="section">
+          <div className="grid">
+            <input
+              className="fieldInput"
+              placeholder="Full Name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+            <input
+              className="fieldInput"
+              placeholder="Address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+            <input
+              className="fieldInput gridSpan2"
+              placeholder="Phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
 
-      <div style={{ marginTop: 22, fontSize: 10, textAlign: "center", opacity: 0.7 }}>
-        Powered by PetitionDesk
+          <textarea
+            className="textarea"
+            placeholder="Enter your complaint..."
+            value={complaint}
+            onChange={(e) => setComplaint(e.target.value)}
+          />
+
+          <label className="evidenceLabel">
+            📎 Evidence
+            <input
+              className="fileInput"
+              type="file"
+              onChange={(e) => setEvidence(e.target.files?.[0] || null)}
+            />
+          </label>
+
+          <button className="btn" onClick={handleGenerate} disabled={loading}>
+            {loading ? "Generating..." : "Generate Petition"}
+          </button>
+
+          <div className="actions">
+            <button className="btnOutline" onClick={handleSendEmail}>
+              Send Email
+            </button>
+            <button className="btnOutline" onClick={handleDownloadPDF}>
+              Download PDF
+            </button>
+          </div>
+        </div>
+
+        {/* ===== Routing Summary ===== */}
+        {sector && sector !== "unknown" && (
+          <div className="resultBox">
+            <div style={{ fontSize: 14 }}>
+              <strong>Detected sector:</strong> {sector}
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 13 }}>
+              <strong>Email Subject:</strong> {routing.subject || ""}
+            </div>
+
+            {routing.truncated?.to || routing.truncated?.cc ? (
+              <div style={{ fontSize: 12, color: "#a00", marginTop: 8 }}>
+                ⚠ Mail client limit: only the first 10 recipients
+              </div>
+            ) : null}
+
+            <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
+              <div>
+                <strong>Mentioned institutions (used for routing):</strong>{" "}
+                {routing.mentionedInstitutions?.length
+                  ? routing.mentionedInstitutions.join(", ")
+                  : "None"}
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                <div>
+                  <strong>TO:</strong>{" "}
+                  {routing.to?.length ? routing.to.join(", ") : "None"}
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <strong>CC:</strong>{" "}
+                  {routing.cc?.length ? routing.cc.join(", ") : "None"}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== Petition Output ===== */}
+        <pre className="petitionText">{petition}</pre>
+
+        <div style={{ marginTop: 18, fontSize: 10, textAlign: "center" }}>
+          Powered by PetitionDesk
+        </div>
       </div>
     </div>
   );
