@@ -90,19 +90,22 @@ define(['./workbox-5a5d9309'], (function (workbox) { 'use strict';
     "url": "assets/index-CV3EM68E.css",
     "revision": null
   }, {
+    "url": "logo.jpg",
+    "revision": "b4a50c8e0ec5c8332f6c179e9d499cfb"
+  }, {
     "url": "pwa-192.png",
-    "revision": "8e3a10e157f75ada21ab742c022d5430"
+    "revision": "9d3ffe557eb0aab3647ef3a91a311101"
   }, {
     "url": "pwa-512-maskable.png",
-    "revision": "8e3a10e157f75ada21ab742c022d5430"
+    "revision": "c3c69c668027ba0c4a13a0d300fc83e5"
   }, {
     "url": "pwa-512.png",
-    "revision": "8e3a10e157f75ada21ab742c022d5430"
+    "revision": "77ca94d6b8d2b0fdff49f43830c51b87"
   }, {
     "url": "manifest.webmanifest",
-    "revision": "d220797d0744e85c0d3030fa34dce66c"
+    "revision": "d3db94cb8b37922bd0757dd1cbfa8407"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html")));
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
 
 }));
