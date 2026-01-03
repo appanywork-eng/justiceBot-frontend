@@ -1,5 +1,7 @@
-// src/App.jsx
-import { useState, useEffect } from "react";
+/* ============================================================
+   FILE: src/App.jsx
+============================================================ */
+import { useEffect, useMemo, useState } from "react";
 
 export default function App() {
   const [fullName, setFullName] = useState("");
@@ -7,19 +9,32 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
   const [preview, setPreview] = useState("");
   const [txRef, setTxRef] = useState("");
   const [needsPayment, setNeedsPayment] = useState(false);
+
   const [unlocked, setUnlocked] = useState(false);
   const [petitionText, setPetitionText] = useState("");
   const [mailto, setMailto] = useState("");
 
   // ✅ Netlify should set VITE_API_BASE
   // Fallback uses your Render URL
-  const API_BASE =
-    import.meta.env.VITE_API_BASE || "https://justicebot-backend-6pzy.onrender.com";
+  const API_BASE = useMemo(() => {
+    const raw = import.meta.env.VITE_API_BASE || "https://justicebot-backend-6pzy.onrender.com";
+    return String(raw).replace(/\/+$/, ""); // avoid trailing slash -> prevents //generate-petition
+  }, []);
+
+  async function safeJson(res) {
+    try {
+      return await res.json();
+    } catch {
+      return {};
+    }
+  }
 
   async function handleGenerate(e) {
     e.preventDefault();
@@ -33,6 +48,8 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
+        mode: "cors",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           complaint: description.trim(),
@@ -45,14 +62,15 @@ export default function App() {
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
 
       setPreview(data.preview || "");
       setTxRef(data.tx_ref || "");
       setNeedsPayment(Boolean(data.needsPayment));
     } catch (err) {
-      setError(err?.message || "Failed to generate petition");
+      // fetch() network/CORS errors surface here as TypeError
+      setError(err?.message || "Failed to generate petition (network/CORS)");
     } finally {
       setLoading(false);
     }
@@ -66,6 +84,8 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/pay/initialize`, {
         method: "POST",
+        mode: "cors",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tx_ref: txRef,
@@ -77,7 +97,7 @@ export default function App() {
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || `Payment init error ${res.status}`);
 
       if (data.ok && data.link) window.location.href = data.link;
@@ -96,11 +116,13 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/unlock-petition`, {
         method: "POST",
+        mode: "cors",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tx_ref: returnedTxRef }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || `Unlock error ${res.status}`);
 
       if (data.ok && data.unlocked) {
@@ -138,7 +160,6 @@ export default function App() {
         fontFamily: "system-ui, sans-serif",
       }}
     >
-      {/* Header trimmed: keep your UI as-is */}
       <div
         style={{
           background: "linear-gradient(135deg, #006600, #009900)",
@@ -302,3 +323,4 @@ const inputStyle = {
   fontSize: "16px",
   backgroundColor: "#fff",
 };
+
