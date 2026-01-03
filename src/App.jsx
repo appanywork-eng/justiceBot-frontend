@@ -7,12 +7,7 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
-
-  // ✅ Split loading states (CRITICAL FIX)
-  const [generating, setGenerating] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const [unlocking, setUnlocking] = useState(false);
-
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
   const [txRef, setTxRef] = useState("");
@@ -24,28 +19,14 @@ export default function App() {
   // Your live Render backend
   const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
-  // ✅ Helper: relock after actions
-  function relockNow() {
-    setUnlocked(false);
-    setPetitionText("");
-    setMailto("");
-    setNeedsPayment(false);
-    setPreview("");
-    setTxRef("");
-  }
-
   async function handleGenerate(e) {
     e.preventDefault();
     setError("");
-    setGenerating(true);
-
-    // reset view state (but do NOT interfere with unlock flow)
+    setLoading(true);
     setPreview("");
     setTxRef("");
     setNeedsPayment(false);
     setUnlocked(false);
-    setPetitionText("");
-    setMailto("");
 
     try {
       const res = await fetch(`${API_BASE}/generate-petition`, {
@@ -69,24 +50,21 @@ export default function App() {
       setTxRef(data.tx_ref || "");
       setNeedsPayment(data.needsPayment !== false);
 
-      if (data.tx_ref) {
-        localStorage.setItem("pd_last_tx_ref", data.tx_ref);
-      }
+      if (data.tx_ref) localStorage.setItem("pd_last_tx_ref", data.tx_ref);
     } catch (err) {
       console.error(err);
       setError(err?.message || "Failed to generate petition");
     } finally {
-      setGenerating(false);
+      setLoading(false);
     }
   }
 
   async function handlePay() {
     if (!txRef) return;
+    setLoading(true);
     setError("");
-    setPaying(true);
 
     try {
-      // ✅ store tx_ref before redirecting away
       localStorage.setItem("pd_pending_tx_ref", txRef);
 
       const res = await fetch(`${API_BASE}/pay/initialize`, {
@@ -113,16 +91,21 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setError(err?.message || "Payment failed. Try again.");
-      setPaying(false);
+      setLoading(false);
     }
   }
 
-  // ✅ Unlock ONCE (no retry loops). Backend should do trust-first unlock.
-  async function unlockByTxRef(ref) {
+  function relockNow() {
+    setUnlocked(false);
+    setPetitionText("");
+    setMailto("");
+  }
+
+  async function unlockByTxRef(ref, attempt = 1) {
     if (!ref) return;
 
+    setLoading(true);
     setError("");
-    setUnlocking(true);
 
     try {
       const res = await fetch(`${API_BASE}/unlock-petition`, {
@@ -132,6 +115,20 @@ export default function App() {
       });
 
       const data = await res.json().catch(() => ({}));
+
+      // Pending means “processing”—retry automatically
+      if (res.status === 202 || data?.pending) {
+        setLoading(false);
+        setError("Payment processing… please wait a moment.");
+
+        if (attempt < 10) {
+          setTimeout(() => unlockByTxRef(ref, attempt + 1), 3000);
+        } else {
+          setError("Still processing. Please refresh in 1 minute.");
+        }
+        return;
+      }
+
       if (!res.ok) throw new Error(data.error || `Unlock error ${res.status}`);
 
       if (data.ok && data.unlocked) {
@@ -139,56 +136,47 @@ export default function App() {
         setPetitionText(data.petition || "");
         setMailto(data.mailto || "");
 
-        // ✅ clear saved refs after successful unlock
         localStorage.removeItem("pd_pending_tx_ref");
         localStorage.removeItem("pd_last_tx_ref");
 
-        // ✅ clean URL but stay on same page
         window.history.replaceState({}, document.title, "/");
       } else {
         throw new Error(data.error || "Could not unlock petition");
       }
     } catch (err) {
       console.error(err);
-
-      // IMPORTANT: Don’t accuse user. Give a simple recovery instruction.
-      setError(
-        err?.message ||
-          "We received your payment. If the content doesn’t appear, refresh once. If you were charged and still don’t see it, contact support."
-      );
+      setError(err?.message || "Verification failed. If charged, contact support.");
     } finally {
-      setUnlocking(false);
+      setLoading(false);
     }
   }
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-
-    // Flutterwave usually returns tx_ref. Use it if present.
     const returnedTxRef = urlParams.get("tx_ref");
+    const status = (urlParams.get("status") || "").toLowerCase();
 
-    // Fallbacks
+    // If Flutterwave says failed/cancelled, stop auto-unlock loops
+    if (returnedTxRef && status && status !== "successful" && status !== "success" && status !== "completed") {
+      localStorage.removeItem("pd_pending_tx_ref");
+      setError("Payment was not completed. If you were charged, contact support with your tx_ref.");
+      return;
+    }
+
     const pending = localStorage.getItem("pd_pending_tx_ref");
     const last = localStorage.getItem("pd_last_tx_ref");
-
     const refToUse = returnedTxRef || pending || last;
 
-    // ✅ only attempt unlock if we have a ref
     if (refToUse) unlockByTxRef(refToUse);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleDownloadPdf() {
     if (!petitionText) return;
-
     const url = `${API_BASE}/download-pdf?text=${encodeURIComponent(petitionText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
-
-    // ✅ Lock back after action (your rule)
-    setTimeout(() => relockNow(), 500);
+    relockNow();
   }
-
-  const anyBusy = generating || paying || unlocking;
 
   return (
     <div
@@ -287,13 +275,6 @@ export default function App() {
         <p style={{ fontSize: "18px", fontWeight: "500", margin: 0, opacity: 0.95 }}>
           Legal AI Petition Generator
         </p>
-
-        {/* ✅ Show unlock status without breaking UI */}
-        {unlocking && (
-          <p style={{ marginTop: "10px", fontSize: "14px", opacity: 0.95 }}>
-            Verifying payment and unlocking your petition…
-          </p>
-        )}
       </div>
 
       {!unlocked ? (
@@ -340,19 +321,19 @@ export default function App() {
             />
 
             <button
-              disabled={generating || unlocking || !description.trim()}
+              disabled={loading || !description.trim()}
               style={{
                 padding: "16px",
-                backgroundColor: (generating || unlocking) ? "#aaa" : "#006600",
+                backgroundColor: loading ? "#aaa" : "#006600",
                 color: "#fff",
                 fontWeight: "bold",
                 fontSize: "17px",
                 border: "none",
                 borderRadius: "10px",
-                cursor: (generating || unlocking) ? "not-allowed" : "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
               }}
             >
-              {generating ? "Generating..." : unlocking ? "Unlocking..." : "Generate Petition"}
+              {loading ? "Generating..." : "Generate Petition"}
             </button>
           </form>
 
@@ -402,21 +383,21 @@ export default function App() {
 
               <button
                 onClick={handlePay}
-                disabled={paying || unlocking || !txRef}
+                disabled={loading}
                 style={{
                   marginTop: "30px",
                   width: "100%",
                   padding: "16px",
-                  backgroundColor: (paying || unlocking) ? "#ccc" : "#006600",
+                  backgroundColor: loading ? "#ccc" : "#006600",
                   color: "#fff",
                   fontSize: "18px",
                   fontWeight: "bold",
                   border: "none",
                   borderRadius: "12px",
-                  cursor: (paying || unlocking) ? "not-allowed" : "pointer",
+                  cursor: loading ? "not-allowed" : "pointer",
                 }}
               >
-                {paying ? "Redirecting to Payment..." : "Pay ₦1,050 to Unlock Full Petition"}
+                {loading ? "Processing..." : "Pay ₦1,050 to Unlock Full Petition"}
               </button>
             </div>
           )}
@@ -437,12 +418,11 @@ export default function App() {
 
           <button
             onClick={handleDownloadPdf}
-            disabled={anyBusy}
             style={{
               display: "block",
               margin: "20px auto 0",
               padding: "16px",
-              backgroundColor: anyBusy ? "#aaa" : "#006600",
+              backgroundColor: "#006600",
               color: "#fff",
               textAlign: "center",
               borderRadius: "12px",
@@ -452,7 +432,7 @@ export default function App() {
               maxWidth: "400px",
               width: "100%",
               border: "none",
-              cursor: anyBusy ? "not-allowed" : "pointer",
+              cursor: "pointer",
             }}
           >
             Download PDF (Locks After Download)
@@ -464,7 +444,6 @@ export default function App() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
-                // ✅ lock back after action
                 setTimeout(() => relockNow(), 1000);
               }}
               style={{
