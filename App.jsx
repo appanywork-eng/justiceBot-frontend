@@ -1,7 +1,4 @@
-/* ============================================================
-   FILE: src/App.jsx
-============================================================ */
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function App() {
   const [fullName, setFullName] = useState("");
@@ -9,33 +6,23 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   const [preview, setPreview] = useState("");
   const [txRef, setTxRef] = useState("");
   const [needsPayment, setNeedsPayment] = useState(false);
-
   const [unlocked, setUnlocked] = useState(false);
   const [petitionText, setPetitionText] = useState("");
+  const [sector, setSector] = useState("");
+  const [mentionedInstitutions, setMentionedInstitutions] = useState([]);
+  const [toEmails, setToEmails] = useState([]);
+  const [ccEmails, setCcEmails] = useState([]);
   const [mailto, setMailto] = useState("");
 
-  // ✅ Netlify should set VITE_API_BASE
-  // Fallback uses your Render URL
-  const API_BASE = useMemo(() => {
-    const raw = import.meta.env.VITE_API_BASE || "https://justicebot-backend-6pzy.onrender.com";
-    return String(raw).replace(/\/+$/, ""); // avoid trailing slash -> prevents //generate-petition
-  }, []);
+  // FIXED: Use live Render backend URL (no localhost)
+  const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
-  async function safeJson(res) {
-    try {
-      return await res.json();
-    } catch {
-      return {};
-    }
-  }
-
+  // Generate petition (returns preview + payment info)
   async function handleGenerate(e) {
     e.preventDefault();
     setError("");
@@ -48,8 +35,6 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
-        mode: "cors",
-        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           complaint: description.trim(),
@@ -62,20 +47,21 @@ export default function App() {
         }),
       });
 
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data?.error || "Server error");
 
       setPreview(data.preview || "");
       setTxRef(data.tx_ref || "");
       setNeedsPayment(Boolean(data.needsPayment));
     } catch (err) {
-      // fetch() network/CORS errors surface here as TypeError
-      setError(err?.message || "Failed to generate petition (network/CORS)");
+      setError(err?.message || "Failed to generate petition");
     } finally {
       setLoading(false);
     }
   }
 
+  // Initiate payment
   async function handlePay() {
     if (!txRef) return;
     setLoading(true);
@@ -84,8 +70,6 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/pay/initialize`, {
         method: "POST",
-        mode: "cors",
-        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tx_ref: txRef,
@@ -97,56 +81,59 @@ export default function App() {
         }),
       });
 
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || `Payment init error ${res.status}`);
+      const data = await res.json();
 
-      if (data.ok && data.link) window.location.href = data.link;
-      else throw new Error(data.error || "Payment failed");
+      if (data.ok && data.link) {
+        window.location.href = data.link;
+      } else {
+        setError(data.error || "Payment initiation failed");
+      }
     } catch (err) {
-      setError(err?.message || "Payment error");
+      setError(err.message || "Payment error");
     } finally {
       setLoading(false);
     }
   }
 
-  async function unlockByTxRef(returnedTxRef) {
-    setLoading(true);
-    setError("");
+  // Verify payment after redirect
+  async function verifyPaymentAndUnlock() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const returnedTxRef = urlParams.get("tx_ref");
+    const status = urlParams.get("status");
 
-    try {
-      const res = await fetch(`${API_BASE}/unlock-petition`, {
-        method: "POST",
-        mode: "cors",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tx_ref: returnedTxRef }),
-      });
+    if (returnedTxRef && status?.toLowerCase() === "successful") {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/unlock-petition`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tx_ref: returnedTxRef }),
+        });
 
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || `Unlock error ${res.status}`);
+        const data = await res.json();
 
-      if (data.ok && data.unlocked) {
-        setUnlocked(true);
-        setPetitionText(data.petition || "");
-        setMailto(data.mailto || "");
-        window.history.replaceState({}, document.title, "/");
-      } else {
-        throw new Error(data.error || "Could not unlock petition");
+        if (data.ok && data.unlocked) {
+          setUnlocked(true);
+          setPetitionText(data.petition || "");
+          setSector(data.sector || "");
+          setMentionedInstitutions(data.mentionedInstitutions || []);
+          setToEmails(data.to || []);
+          setCcEmails(data.cc || []);
+          setMailto(data.mailto || "");
+          window.history.replaceState({}, document.title, "/");
+        } else {
+          setError(data.error || "Unlock failed");
+        }
+      } catch (err) {
+        setError(err.message || "Verification failed");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err?.message || "Verification failed");
-    } finally {
-      setLoading(false);
     }
   }
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const returnedTxRef = urlParams.get("tx_ref");
-
-    // ✅ Don't depend on `status`
-    if (returnedTxRef) unlockByTxRef(returnedTxRef);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    verifyPaymentAndUnlock();
   }, []);
 
   return (
@@ -157,9 +144,46 @@ export default function App() {
         padding: "20px",
         backgroundColor: "#f8f9fa",
         minHeight: "100vh",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-100%); }
+        }
+      `}</style>
+
+      {/* Moving Disclaimer */}
+      <div
+        style={{
+          backgroundColor: "#006600",
+          color: "#ffffff",
+          padding: "14px 0",
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          marginBottom: "24px",
+          borderRadius: "12px",
+          boxShadow: "0 4px 15px rgba(0, 102, 0, 0.2)",
+        }}
+      >
+        <div
+          style={{
+            display: "inline-block",
+            paddingLeft: "100%",
+            animation: "marquee 35s linear infinite",
+            fontSize: "15px",
+            fontWeight: "500",
+          }}
+        >
+          ✨ PetitionDesk is an advanced AI-powered tool designed to help you draft professional petitions quickly and clearly. 
+          It provides structured drafts based on your input. For official or legal submission, we always recommend reviewing and consulting a qualified legal professional. 
+          Your peace of mind matters to us. ✨ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          ✨ PetitionDesk — Empowering your voice with smart, professional drafting assistance...
+        </div>
+      </div>
+
+      {/* Header */}
       <div
         style={{
           background: "linear-gradient(135deg, #006600, #009900)",
@@ -172,10 +196,46 @@ export default function App() {
           position: "relative",
         }}
       >
-        <h1 style={{ fontSize: "42px", fontWeight: "900", margin: "0 0 8px 0" }}>
-          PetitionDesk....
+        <div
+          style={{
+            position: "absolute",
+            top: "20px",
+            left: "20px",
+            backgroundColor: "#ffffff",
+            color: "#006600",
+            width: "70px",
+            height: "70px",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "32px",
+            fontWeight: "bold",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          }}
+        >
+          PD
+        </div>
+
+        <h1
+          style={{
+            fontSize: "42px",
+            fontWeight: "900",
+            margin: "0 0 8px 0",
+            letterSpacing: "-1px",
+          }}
+        >
+          PetitionDesk
         </h1>
-        <p style={{ fontSize: "18px", fontWeight: "500", margin: 0 }}>
+
+        <p
+          style={{
+            fontSize: "18px",
+            fontWeight: "500",
+            margin: 0,
+            opacity: 0.95,
+          }}
+        >
           Legal AI Petition Generator
         </p>
       </div>
@@ -188,37 +248,36 @@ export default function App() {
               display: "flex",
               flexDirection: "column",
               gap: "22px",
-              background: "#fff",
+              backgroundColor: "#ffffff",
               padding: "32px",
               borderRadius: "16px",
               boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
             }}
           >
-            <label style={{ fontWeight: "600" }}>Full Name</label>
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} required />
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Full Name</label>
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600" }}>Address</label>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} required />
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Address</label>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600" }}>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Email</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600" }}>Phone</label>
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Phone</label>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600" }}>Your Complaint / Issue</label>
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Your Complaint</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              style={{ ...inputStyle, minHeight: "180px", resize: "vertical" }}
-              required
+              style={{ ...inputStyle, minHeight: "160px", resize: "vertical" }}
             />
 
             <button
-              disabled={loading || !description.trim()}
+              disabled={loading}
               style={{
                 padding: "16px",
-                backgroundColor: loading || !description.trim() ? "#aaa" : "#006600",
+                backgroundColor: loading ? "#aaa" : "#006600",
                 color: "#fff",
                 fontWeight: "bold",
                 fontSize: "17px",
@@ -237,35 +296,51 @@ export default function App() {
                 Petition Preview
               </h2>
 
-              <pre
+              <div
                 style={{
-                  padding: "24px",
-                  fontSize: "15px",
-                  lineHeight: "1.65",
-                  whiteSpace: "pre-wrap",
-                  textAlign: "justify",
-                  background: "#fff",
+                  position: "relative",
+                  maxHeight: "520px",
+                  overflowY: "auto",
                   borderRadius: "12px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  border: "1px solid #ddd",
+                  background: "#ffffff",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  userSelect: "none",
                 }}
+                onContextMenu={(e) => e.preventDefault()}
               >
-                {preview}
-              </pre>
+                <pre
+                  style={{
+                    padding: "32px",
+                    margin: 0,
+                    fontSize: "15px",
+                    lineHeight: "1.65",
+                    whiteSpace: "pre-wrap",
+                    textAlign: "justify",
+                    background: "linear-gradient(to bottom, #ffffff 0%, #f8fff8 65%, #e8f5e8 85%, #d0e0d0 100%)",
+                    WebkitMaskImage: "linear-gradient(to bottom, black 75%, transparent 100%)",
+                    maskImage: "linear-gradient(to bottom, black 75%, transparent 100%)",
+                  }}
+                >
+                  {preview}
+                </pre>
+                <div style={{ position: "absolute", inset: 0, background: "transparent", zIndex: 10 }} />
+              </div>
 
               <button
                 onClick={handlePay}
                 disabled={loading}
                 style={{
-                  marginTop: "20px",
+                  marginTop: "30px",
                   width: "100%",
-                  padding: "18px",
-                  backgroundColor: "#006600",
+                  padding: "16px",
+                  backgroundColor: loading ? "#ccc" : "#006600",
                   color: "#fff",
                   fontSize: "18px",
                   fontWeight: "bold",
                   border: "none",
                   borderRadius: "12px",
-                  cursor: "pointer",
+                  cursor: loading ? "not-allowed" : "pointer",
                 }}
               >
                 {loading ? "Processing..." : "Pay ₦1,050 to Unlock Full Petition"}
@@ -274,13 +349,9 @@ export default function App() {
           )}
         </>
       ) : (
-        <div style={{ background: "#fff", padding: "40px", borderRadius: "16px", boxShadow: "0 6px 20px rgba(0,0,0,0.1)" }}>
-          <h2 style={{ color: "#006600", textAlign: "center", marginBottom: "30px" }}>
-            Your Full Petition is Ready!
-          </h2>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: "15px", lineHeight: "1.7", background: "#f9fff9", padding: "20px", borderRadius: "10px" }}>
-            {petitionText}
-          </pre>
+        <div style={{ background: "#ffffff", padding: "32px", borderRadius: "16px", boxShadow: "0 6px 20px rgba(0,0,0,0.1)" }}>
+          <h2 style={{ color: "#006600", textAlign: "center" }}>Your Generated Petition</h2>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: "15px", lineHeight: "1.6" }}>{petitionText}</pre>
 
           {mailto && (
             <a
@@ -289,33 +360,30 @@ export default function App() {
               rel="noopener noreferrer"
               style={{
                 display: "block",
-                margin: "40px auto 0",
-                padding: "18px",
+                margin: "30px auto 0",
+                padding: "16px",
                 backgroundColor: "#006600",
                 color: "#fff",
                 textAlign: "center",
                 borderRadius: "12px",
                 textDecoration: "none",
-                fontSize: "18px",
+                fontSize: "17px",
                 fontWeight: "bold",
-                maxWidth: "500px",
+                maxWidth: "400px",
               }}
             >
-              Open Email Client & Send Petition
+              Open Email & Send Petition
             </a>
           )}
         </div>
       )}
 
-      {error && (
-        <div style={{ color: "#d32f2f", background: "#ffebee", padding: "16px", borderRadius: "8px", marginTop: "20px", textAlign: "center" }}>
-          {error}
-        </div>
-      )}
+      {error && <div style={{ color: "red", textAlign: "center", marginTop: "20px" }}>{error}</div>}
     </div>
   );
 }
 
+// Reusable input style
 const inputStyle = {
   padding: "14px",
   border: "1px solid #ddd",
@@ -323,4 +391,3 @@ const inputStyle = {
   fontSize: "16px",
   backgroundColor: "#fff",
 };
-
