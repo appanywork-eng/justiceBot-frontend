@@ -13,9 +13,12 @@ export default function App() {
   const [needsPayment, setNeedsPayment] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [petitionText, setPetitionText] = useState("");
+  const [sector, setSector] = useState("");
+  const [mentionedInstitutions, setMentionedInstitutions] = useState([]);
+  const [toEmails, setToEmails] = useState([]);
+  const [ccEmails, setCcEmails] = useState([]);
   const [mailto, setMailto] = useState("");
 
-  // Your live Render backend — confirmed running!
   const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
   async function handleGenerate(e) {
@@ -42,18 +45,15 @@ export default function App() {
         }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Server error ${res.status}`);
-      }
-
       const data = await res.json();
+
+      if (!res.ok) throw new Error(data?.error || "Server error");
+
       setPreview(data.preview || "");
       setTxRef(data.tx_ref || "");
-      setNeedsPayment(data.needsPayment !== false);
+      setNeedsPayment(Boolean(data.needsPayment));
     } catch (err) {
-      console.error(err);
-      setError("Failed to connect. Check internet or try again in a moment.");
+      setError(err.message || "Failed to generate petition");
     } finally {
       setLoading(false);
     }
@@ -79,13 +79,14 @@ export default function App() {
       });
 
       const data = await res.json();
+
       if (data.ok && data.link) {
         window.location.href = data.link;
       } else {
-        setError(data.error || "Could not start payment");
+        throw new Error(data.error || "Payment initiation failed");
       }
     } catch (err) {
-      setError("Payment failed. Try again.");
+      setError(err.message || "Payment failed. Please check your details and try again.");
     } finally {
       setLoading(false);
     }
@@ -94,11 +95,10 @@ export default function App() {
   async function verifyPaymentAndUnlock() {
     const urlParams = new URLSearchParams(window.location.search);
     const returnedTxRef = urlParams.get("tx_ref");
+    const status = urlParams.get("status");
 
-    // Unlock if tx_ref exists (Flutterwave sends it on success; status param is optional)
-    if (returnedTxRef) {
+    if (returnedTxRef && status?.toLowerCase() === "successful") {
       setLoading(true);
-      setError("");
       try {
         const res = await fetch(`${API_BASE}/unlock-petition`, {
           method: "POST",
@@ -107,16 +107,21 @@ export default function App() {
         });
 
         const data = await res.json();
+
         if (data.ok && data.unlocked) {
           setUnlocked(true);
           setPetitionText(data.petition || "");
+          setSector(data.sector || "");
+          setMentionedInstitutions(data.mentionedInstitutions || []);
+          setToEmails(data.to || []);
+          setCcEmails(data.cc || []);
           setMailto(data.mailto || "");
           window.history.replaceState({}, document.title, "/");
         } else {
-          setError(data.error || "Could not unlock petition");
+          setError(data.error || "Unlock failed");
         }
       } catch (err) {
-        setError("Verification failed. If charged, contact support.");
+        setError(err.message || "Verification failed");
       } finally {
         setLoading(false);
       }
@@ -138,36 +143,34 @@ export default function App() {
         fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
-      {/* Moving Disclaimer */}
+      {/* Moving Disclaimer Banner (marquee style) */}
       <div
         style={{
           backgroundColor: "#006600",
           color: "#ffffff",
-          padding: "14px 0",
+          padding: "12px 0",
           overflow: "hidden",
           whiteSpace: "nowrap",
-          marginBottom: "24px",
-          borderRadius: "12px",
-          boxShadow: "0 4px 15px rgba(0, 102, 0, 0.2)",
+          marginBottom: "30px",
+          borderRadius: "10px",
+          boxShadow: "0 4px 12px rgba(0, 102, 0, 0.25)",
         }}
       >
         <div
           style={{
             display: "inline-block",
             paddingLeft: "100%",
-            animation: "marquee 35s linear infinite",
+            animation: "marquee 28s linear infinite",
+            fontWeight: "600",
             fontSize: "15px",
-            fontWeight: "500",
           }}
         >
-          ✨ PetitionDesk is an advanced AI-powered tool designed to help you draft professional petitions quickly and clearly. 
-          It provides structured drafts based on your input. For official submission, always review with a qualified lawyer. 
-          Your peace of mind matters to us. ✨ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-          ✨ PetitionDesk — Empowering your voice with smart, professional drafting assistance...
+          <strong>DISCLAIMER:</strong> PetitionDesk is an AI-powered petition drafting tool only. It is NOT legal advice, NOT a substitute for professional legal services, and has NO official or governmental authority. All content is generated automatically. Use at your own risk. Always consult a qualified lawyer before submitting any petition. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          <strong>DISCLAIMER:</strong> PetitionDesk is an AI-powered petition drafting tool only...
         </div>
       </div>
 
-      {/* Header with PD logo */}
+      {/* Header */}
       <div
         style={{
           background: "linear-gradient(135deg, #006600, #009900)",
@@ -264,7 +267,19 @@ export default function App() {
                 Petition Preview
               </h2>
 
-              <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+              <div
+                style={{
+                  position: "relative",
+                  maxHeight: "520px",
+                  overflowY: "auto",
+                  borderRadius: "12px",
+                  border: "1px solid #ddd",
+                  background: "#ffffff",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  userSelect: "none",
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+              >
                 <pre
                   style={{
                     padding: "32px",
@@ -273,26 +288,14 @@ export default function App() {
                     lineHeight: "1.65",
                     whiteSpace: "pre-wrap",
                     textAlign: "justify",
-                    background: "linear-gradient(to bottom, #ffffff 0%, #f8fff8 65%, #e8f5e8 100%)",
-                    minHeight: "520px",
-                    borderRadius: "12px",
+                    background: "linear-gradient(to bottom, #ffffff 0%, #f8fff8 65%, #e8f5e8 85%, #d0e0d0 100%)",
+                    WebkitMaskImage: "linear-gradient(to bottom, black 75%, transparent 100%)",
+                    maskImage: "linear-gradient(to bottom, black 75%, transparent 100%)",
                   }}
                 >
                   {preview}
                 </pre>
-
-                {/* Darkening fade at bottom */}
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: "200px",
-                    background: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 100%)",
-                    pointerEvents: "none",
-                  }}
-                />
+                <div style={{ position: "absolute", inset: 0, background: "transparent", zIndex: 10 }} />
               </div>
 
               <button
@@ -346,11 +349,7 @@ export default function App() {
         </div>
       )}
 
-      {error && (
-        <div style={{ color: "red", textAlign: "center", marginTop: "20px", fontWeight: "bold" }}>
-          {error}
-        </div>
-      )}
+      {error && <div style={{ color: "red", textAlign: "center", marginTop: "20px" }}>{error}</div>}
     </div>
   );
 }
