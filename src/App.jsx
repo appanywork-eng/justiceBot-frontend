@@ -50,7 +50,6 @@ export default function App() {
       setTxRef(data.tx_ref || "");
       setNeedsPayment(data.needsPayment !== false);
 
-      // keep latest tx_ref available (helps in weird reload cases)
       if (data.tx_ref) localStorage.setItem("pd_last_tx_ref", data.tx_ref);
     } catch (err) {
       console.error(err);
@@ -66,7 +65,6 @@ export default function App() {
     setError("");
 
     try {
-      // ✅ store tx_ref before redirecting away
       localStorage.setItem("pd_pending_tx_ref", txRef);
 
       const res = await fetch(`${API_BASE}/pay/initialize`, {
@@ -97,7 +95,13 @@ export default function App() {
     }
   }
 
-  async function unlockByTxRef(ref) {
+  function relockNow() {
+    setUnlocked(false);
+    setPetitionText("");
+    setMailto("");
+  }
+
+  async function unlockByTxRef(ref, attempt = 1) {
     if (!ref) return;
 
     setLoading(true);
@@ -111,6 +115,23 @@ export default function App() {
       });
 
       const data = await res.json().catch(() => ({}));
+
+      // ✅ NEW: Pending means “processing”—retry automatically
+      if (res.status === 202 || data?.pending) {
+        setLoading(false);
+
+        // show friendly status, not accusation
+        setError("Payment processing… please wait a moment.");
+
+        // retry up to 10 times (about ~30 seconds total)
+        if (attempt < 10) {
+          setTimeout(() => unlockByTxRef(ref, attempt + 1), 3000);
+        } else {
+          setError("Still processing. Please refresh in 1 minute.");
+        }
+        return;
+      }
+
       if (!res.ok) throw new Error(data.error || `Unlock error ${res.status}`);
 
       if (data.ok && data.unlocked) {
@@ -118,11 +139,9 @@ export default function App() {
         setPetitionText(data.petition || "");
         setMailto(data.mailto || "");
 
-        // ✅ clear pending tx_ref after successful unlock
         localStorage.removeItem("pd_pending_tx_ref");
         localStorage.removeItem("pd_last_tx_ref");
 
-        // ✅ clean URL but keep you on the SAME page
         window.history.replaceState({}, document.title, "/");
       } else {
         throw new Error(data.error || "Could not unlock petition");
@@ -137,11 +156,8 @@ export default function App() {
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-
-    // ✅ Option A: unlock if tx_ref exists (do NOT depend on status)
     const returnedTxRef = urlParams.get("tx_ref");
 
-    // ✅ fallback: if Flutterwave redirect doesn’t include tx_ref, use saved one
     const pending = localStorage.getItem("pd_pending_tx_ref");
     const last = localStorage.getItem("pd_last_tx_ref");
 
@@ -150,6 +166,14 @@ export default function App() {
     if (refToUse) unlockByTxRef(refToUse);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function handleDownloadPdf() {
+    if (!petitionText) return;
+    const url = `${API_BASE}/download-pdf?text=${encodeURIComponent(petitionText)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    // ✅ lock back after action
+    relockNow();
+  }
 
   return (
     <div
@@ -267,20 +291,12 @@ export default function App() {
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
               Full Name
             </label>
-            <input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              style={inputStyle}
-            />
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
               Address
             </label>
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              style={inputStyle}
-            />
+            <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
               Email
@@ -397,14 +413,40 @@ export default function App() {
             {petitionText}
           </pre>
 
+          <button
+            onClick={handleDownloadPdf}
+            style={{
+              display: "block",
+              margin: "20px auto 0",
+              padding: "16px",
+              backgroundColor: "#006600",
+              color: "#fff",
+              textAlign: "center",
+              borderRadius: "12px",
+              textDecoration: "none",
+              fontSize: "17px",
+              fontWeight: "bold",
+              maxWidth: "400px",
+              width: "100%",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            Download PDF (Locks After Download)
+          </button>
+
           {mailto && (
             <a
               href={mailto}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => {
+                // ✅ lock back after action
+                setTimeout(() => relockNow(), 1000);
+              }}
               style={{
                 display: "block",
-                margin: "30px auto 0",
+                margin: "20px auto 0",
                 padding: "16px",
                 backgroundColor: "#006600",
                 color: "#fff",
@@ -416,7 +458,7 @@ export default function App() {
                 maxWidth: "400px",
               }}
             >
-              Open Email & Send Petition
+              Open Email & Send Petition (Locks After Click)
             </a>
           )}
         </div>
