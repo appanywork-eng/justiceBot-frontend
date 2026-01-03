@@ -13,16 +13,11 @@ export default function App() {
   const [needsPayment, setNeedsPayment] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [petitionText, setPetitionText] = useState("");
-  const [sector, setSector] = useState("");
-  const [mentionedInstitutions, setMentionedInstitutions] = useState([]);
-  const [toEmails, setToEmails] = useState([]);
-  const [ccEmails, setCcEmails] = useState([]);
   const [mailto, setMailto] = useState("");
 
-  // FIXED: Use live Render backend URL (no localhost)
+  // FIXED: Live Render backend URL (solves fetch errors)
   const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
-  // Generate petition (returns preview + payment info)
   async function handleGenerate(e) {
     e.preventDefault();
     setError("");
@@ -53,15 +48,15 @@ export default function App() {
 
       setPreview(data.preview || "");
       setTxRef(data.tx_ref || "");
-      setNeedsPayment(Boolean(data.needsPayment));
+      setNeedsPayment(data.needsPayment || false);
     } catch (err) {
-      setError(err?.message || "Failed to generate petition");
+      setError(err.message || "Failed to generate petition");
+      console.error(err);
     } finally {
       setLoading(false);
     }
   }
 
-  // Initiate payment
   async function handlePay() {
     if (!txRef) return;
     setLoading(true);
@@ -95,7 +90,6 @@ export default function App() {
     }
   }
 
-  // Verify payment after redirect
   async function verifyPaymentAndUnlock() {
     const urlParams = new URLSearchParams(window.location.search);
     const returnedTxRef = urlParams.get("tx_ref");
@@ -115,10 +109,6 @@ export default function App() {
         if (data.ok && data.unlocked) {
           setUnlocked(true);
           setPetitionText(data.petition || "");
-          setSector(data.sector || "");
-          setMentionedInstitutions(data.mentionedInstitutions || []);
-          setToEmails(data.to || []);
-          setCcEmails(data.cc || []);
           setMailto(data.mailto || "");
           window.history.replaceState({}, document.title, "/");
         } else {
@@ -147,13 +137,6 @@ export default function App() {
         fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
-      <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-100%); }
-        }
-      `}</style>
-
       {/* Moving Disclaimer */}
       <div
         style={{
@@ -378,16 +361,5 @@ export default function App() {
         </div>
       )}
 
-      {error && <div style={{ color: "red", textAlign: "center", marginTop: "20px" }}>{error}</div>}
-    </div>
-  );
-}
-
-// Reusable input style
-const inputStyle = {
-  padding: "14px",
-  border: "1px solid #ddd",
-  borderRadius: "10px",
-  fontSize: "16px",
-  backgroundColor: "#fff",
-};
+   {error && <div style={{ color: "red", textAlign: "center", marginTop: "20px" }}>{error}</div>}
+ </div>
