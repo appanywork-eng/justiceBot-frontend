@@ -19,8 +19,11 @@ export default function App() {
   // Your live Render backend
   const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
+  // ✅ FIX: allow calling from both onSubmit and onClick without reload issues
   async function handleGenerate(e) {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault(); // ✅ safe guard
+    if (loading) return; // ✅ prevent double-taps on mobile
+
     setError("");
     setLoading(true);
     setPreview("");
@@ -116,14 +119,11 @@ export default function App() {
 
       const data = await res.json().catch(() => ({}));
 
-      // ✅ NEW: Pending means “processing”—retry automatically
+      // ✅ Pending means “processing”—retry automatically
       if (res.status === 202 || data?.pending) {
         setLoading(false);
-
-        // show friendly status, not accusation
         setError("Payment processing… please wait a moment.");
 
-        // retry up to 10 times (about ~30 seconds total)
         if (attempt < 10) {
           setTimeout(() => unlockByTxRef(ref, attempt + 1), 3000);
         } else {
@@ -171,7 +171,6 @@ export default function App() {
     if (!petitionText) return;
     const url = `${API_BASE}/download-pdf?text=${encodeURIComponent(petitionText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
-    // ✅ lock back after action
     relockNow();
   }
 
@@ -317,7 +316,10 @@ export default function App() {
               style={{ ...inputStyle, minHeight: "160px", resize: "vertical" }}
             />
 
+            {/* ✅ FIX: prevent mobile form-refresh by making this a normal button */}
             <button
+              type="button"
+              onClick={handleGenerate}
               disabled={loading || !description.trim()}
               style={{
                 padding: "16px",
@@ -441,7 +443,6 @@ export default function App() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
-                // ✅ lock back after action
                 setTimeout(() => relockNow(), 1000);
               }}
               style={{
