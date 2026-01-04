@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function App() {
   const [fullName, setFullName] = useState("");
@@ -7,26 +7,122 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
   const [preview, setPreview] = useState("");
   const [txRef, setTxRef] = useState("");
   const [needsPayment, setNeedsPayment] = useState(false);
+
   const [unlocked, setUnlocked] = useState(false);
   const [petitionText, setPetitionText] = useState("");
+
+  // ✅ restored fields you had before
+  const [sector, setSector] = useState("");
+  const [mentionedInstitutions, setMentionedInstitutions] = useState([]);
+  const [toEmails, setToEmails] = useState([]);
+  const [ccEmails, setCcEmails] = useState([]);
   const [mailto, setMailto] = useState("");
+
+  // ✅ Admin mode (30 mins)
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [adminKeyInput, setAdminKeyInput] = useState("");
+  const [adminActive, setAdminActive] = useState(false);
 
   // Your live Render backend
   const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
 
+  // ---- hidden admin trigger (tap PD logo 5 times)
+  const tapCountRef = useRef(0);
+  const tapTimerRef = useRef(null);
+
+  function handleLogoTap() {
+    tapCountRef.current += 1;
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    tapTimerRef.current = setTimeout(() => {
+      tapCountRef.current = 0;
+    }, 1200);
+
+    if (tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      setAdminModalOpen(true);
+    }
+  }
+
+  function getAdminToken() {
+    const token = sessionStorage.getItem("pd_admin_token") || "";
+    const until = Number(sessionStorage.getItem("pd_admin_until") || 0);
+    if (!token || !until) return "";
+    if (Date.now() > until) {
+      sessionStorage.removeItem("pd_admin_token");
+      sessionStorage.removeItem("pd_admin_until");
+      return "";
+    }
+    return token;
+  }
+
+  function syncAdminActive() {
+    const token = getAdminToken();
+    setAdminActive(Boolean(token));
+  }
+
+  async function createAdminSession() {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: adminKeyInput.trim() }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Admin session failed");
+
+      if (data.ok && data.token) {
+        const ttlMs = Number(data.expiresInSeconds || 1800) * 1000;
+        sessionStorage.setItem("pd_admin_token", data.token);
+        sessionStorage.setItem("pd_admin_until", String(Date.now() + ttlMs));
+        setAdminActive(true);
+        setAdminModalOpen(false);
+        setAdminKeyInput("");
+        setError("");
+      } else {
+        throw new Error("Admin session failed");
+      }
+    } catch (e) {
+      setError(e?.message || "Admin session failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function clearAdmin() {
+    sessionStorage.removeItem("pd_admin_token");
+    sessionStorage.removeItem("pd_admin_until");
+    setAdminActive(false);
+  }
+
+  // ===========
+  // Generate
+  // ===========
   async function handleGenerate(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
+
     setPreview("");
     setTxRef("");
     setNeedsPayment(false);
+
     setUnlocked(false);
+    setPetitionText("");
+    setSector("");
+    setMentionedInstitutions([]);
+    setToEmails([]);
+    setCcEmails([]);
+    setMailto("");
 
     try {
       const res = await fetch(`${API_BASE}/generate-petition`, {
@@ -50,7 +146,9 @@ export default function App() {
       setTxRef(data.tx_ref || "");
       setNeedsPayment(data.needsPayment !== false);
 
-      if (data.tx_ref) localStorage.setItem("pd_last_tx_ref", data.tx_ref);
+      if (data.tx_ref) {
+        localStorage.setItem("pd_last_tx_ref", data.tx_ref);
+      }
     } catch (err) {
       console.error(err);
       setError(err?.message || "Failed to generate petition");
@@ -59,6 +157,9 @@ export default function App() {
     }
   }
 
+  // ===========
+  // Pay
+  // ===========
   async function handlePay() {
     if (!txRef) return;
     setLoading(true);
@@ -95,34 +196,35 @@ export default function App() {
     }
   }
 
-  function relockNow() {
-    setUnlocked(false);
-    setPetitionText("");
-    setMailto("");
-  }
-
+  // ===========
+  // Unlock
+  // ===========
   async function unlockByTxRef(ref, attempt = 1) {
     if (!ref) return;
 
     setLoading(true);
-    setError("");
 
     try {
+      const adminToken = getAdminToken();
+
       const res = await fetch(`${API_BASE}/unlock-petition`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(adminToken ? { "x-admin-token": adminToken } : {}),
+        },
         body: JSON.stringify({ tx_ref: ref }),
       });
 
       const data = await res.json().catch(() => ({}));
 
-      // Pending means “processing”—retry automatically
+      // Pending = retry (but keep it gentle)
       if (res.status === 202 || data?.pending) {
         setLoading(false);
         setError("Payment processing… please wait a moment.");
 
-        if (attempt < 10) {
-          setTimeout(() => unlockByTxRef(ref, attempt + 1), 3000);
+        if (attempt < 12) {
+          setTimeout(() => unlockByTxRef(ref, attempt + 1), 2500);
         } else {
           setError("Still processing. Please refresh in 1 minute.");
         }
@@ -134,12 +236,23 @@ export default function App() {
       if (data.ok && data.unlocked) {
         setUnlocked(true);
         setPetitionText(data.petition || "");
+
+        // ✅ restored details
+        setSector(data.sector || "");
+        setMentionedInstitutions(data.mentionedInstitutions || []);
+        setToEmails(data.to || []);
+        setCcEmails(data.cc || []);
         setMailto(data.mailto || "");
 
-        localStorage.removeItem("pd_pending_tx_ref");
-        localStorage.removeItem("pd_last_tx_ref");
+        // only clear tx refs when paid unlock (admin should not wipe)
+        if (!data.admin) {
+          localStorage.removeItem("pd_pending_tx_ref");
+          localStorage.removeItem("pd_last_tx_ref");
+        }
 
+        // clean URL
         window.history.replaceState({}, document.title, "/");
+        setError("");
       } else {
         throw new Error(data.error || "Could not unlock petition");
       }
@@ -151,32 +264,53 @@ export default function App() {
     }
   }
 
+  // ===========
+  // Download PDF
+  // ===========
+  function handleDownloadPdf() {
+    if (!petitionText) return;
+    const url = `${API_BASE}/download-pdf?text=${encodeURIComponent(petitionText)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+
+    // ✅ only relock for normal users (admin mode stays unlocked for testing)
+    if (!adminActive) {
+      relockNow();
+    }
+  }
+
+  // ===========
+  // Relock
+  // ===========
+  function relockNow() {
+    setUnlocked(false);
+    setPetitionText("");
+    setSector("");
+    setMentionedInstitutions([]);
+    setToEmails([]);
+    setCcEmails([]);
+    setMailto("");
+  }
+
+  // ===========
+  // On load: track visit + unlock if redirected back with tx_ref
+  // ===========
   useEffect(() => {
+    // track visit (counter)
+    fetch(`${API_BASE}/track/visit`, { method: "POST" }).catch(() => {});
+
+    syncAdminActive();
+
     const urlParams = new URLSearchParams(window.location.search);
     const returnedTxRef = urlParams.get("tx_ref");
-    const status = (urlParams.get("status") || "").toLowerCase();
-
-    // If Flutterwave says failed/cancelled, stop auto-unlock loops
-    if (returnedTxRef && status && status !== "successful" && status !== "success" && status !== "completed") {
-      localStorage.removeItem("pd_pending_tx_ref");
-      setError("Payment was not completed. If you were charged, contact support with your tx_ref.");
-      return;
-    }
 
     const pending = localStorage.getItem("pd_pending_tx_ref");
     const last = localStorage.getItem("pd_last_tx_ref");
+
     const refToUse = returnedTxRef || pending || last;
 
     if (refToUse) unlockByTxRef(refToUse);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  function handleDownloadPdf() {
-    if (!petitionText) return;
-    const url = `${API_BASE}/download-pdf?text=${encodeURIComponent(petitionText)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-    relockNow();
-  }
 
   return (
     <div
@@ -186,8 +320,7 @@ export default function App() {
         padding: "20px",
         backgroundColor: "#f8f9fa",
         minHeight: "100vh",
-        fontFamily:
-          "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       <style>{`
@@ -219,13 +352,45 @@ export default function App() {
             fontWeight: "500",
           }}
         >
-          ✨ PetitionDesk is an advanced AI-powered tool designed to help you draft
-          professional petitions quickly and clearly. It provides structured drafts
-          based on your input. For official submission, always review with a qualified
-          lawyer. Your peace of mind matters to us. ✨ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          ✨ PetitionDesk is an advanced AI-powered tool designed to help you draft professional petitions quickly and clearly.
+          It provides structured drafts based on your input. For official submission, always review with a qualified lawyer.
+          Your peace of mind matters to us. ✨ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
           ✨ PetitionDesk — Empowering your voice with smart, professional drafting assistance...
         </div>
       </div>
+
+      {/* Admin banner */}
+      {adminActive && (
+        <div
+          style={{
+            background: "#111",
+            color: "#fff",
+            padding: "10px 14px",
+            borderRadius: "10px",
+            marginBottom: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: "14px",
+          }}
+        >
+          <span>🛠 Admin Test Mode (unlocked actions won’t re-lock)</span>
+          <button
+            onClick={clearAdmin}
+            style={{
+              background: "#fff",
+              color: "#111",
+              border: "none",
+              borderRadius: "8px",
+              padding: "6px 10px",
+              cursor: "pointer",
+              fontWeight: "700",
+            }}
+          >
+            Exit Admin
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div
@@ -241,6 +406,7 @@ export default function App() {
         }}
       >
         <div
+          onClick={handleLogoTap}
           style={{
             position: "absolute",
             top: "20px",
@@ -256,19 +422,15 @@ export default function App() {
             fontSize: "32px",
             fontWeight: "bold",
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+            userSelect: "none",
+            cursor: "pointer",
           }}
+          title="(Admin: tap 5 times)"
         >
           PD
         </div>
 
-        <h1
-          style={{
-            fontSize: "42px",
-            fontWeight: "900",
-            margin: "0 0 8px 0",
-            letterSpacing: "-1px",
-          }}
-        >
+        <h1 style={{ fontSize: "42px", fontWeight: "900", margin: "0 0 8px 0", letterSpacing: "-1px" }}>
           PetitionDesk
         </h1>
 
@@ -276,6 +438,81 @@ export default function App() {
           Legal AI Petition Generator
         </p>
       </div>
+
+      {/* Admin modal */}
+      {adminModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            zIndex: 9999,
+          }}
+          onClick={() => setAdminModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              background: "#fff",
+              borderRadius: "16px",
+              padding: "22px",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.35)",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "10px", color: "#006600" }}>Admin Unlock (30 mins)</h3>
+            <p style={{ marginTop: 0, color: "#444", fontSize: "14px" }}>
+              Enter your admin key to enable test mode (no re-lock after download/email).
+            </p>
+
+            <input
+              value={adminKeyInput}
+              onChange={(e) => setAdminKeyInput(e.target.value)}
+              placeholder="Admin key"
+              style={inputStyle}
+              autoFocus
+            />
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
+              <button
+                disabled={loading || !adminKeyInput.trim()}
+                onClick={createAdminSession}
+                style={{
+                  flex: 1,
+                  padding: "14px",
+                  backgroundColor: loading ? "#aaa" : "#006600",
+                  color: "#fff",
+                  fontWeight: "bold",
+                  border: "none",
+                  borderRadius: "10px",
+                  cursor: loading ? "not-allowed" : "pointer",
+                }}
+              >
+                Enable Admin
+              </button>
+              <button
+                onClick={() => setAdminModalOpen(false)}
+                style={{
+                  padding: "14px",
+                  backgroundColor: "#eee",
+                  color: "#111",
+                  fontWeight: "bold",
+                  border: "none",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!unlocked ? (
         <>
@@ -291,29 +528,19 @@ export default function App() {
               boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
             }}
           >
-            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
-              Full Name
-            </label>
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Full Name</label>
             <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
-              Address
-            </label>
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Address</label>
             <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
-              Email
-            </label>
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Email</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
-              Phone
-            </label>
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Phone</label>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
-              Your Complaint
-            </label>
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Your Complaint</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -359,8 +586,7 @@ export default function App() {
                     lineHeight: "1.65",
                     whiteSpace: "pre-wrap",
                     textAlign: "justify",
-                    background:
-                      "linear-gradient(to bottom, #ffffff 0%, #f8fff8 65%, #e8f5e8 100%)",
+                    background: "linear-gradient(to bottom, #ffffff 0%, #f8fff8 65%, #e8f5e8 100%)",
                     minHeight: "520px",
                     borderRadius: "12px",
                   }}
@@ -403,19 +629,45 @@ export default function App() {
           )}
         </>
       ) : (
-        <div
-          style={{
-            background: "#ffffff",
-            padding: "32px",
-            borderRadius: "16px",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
-          }}
-        >
+        <div style={{ background: "#ffffff", padding: "32px", borderRadius: "16px", boxShadow: "0 6px 20px rgba(0,0,0,0.1)" }}>
           <h2 style={{ color: "#006600", textAlign: "center" }}>Your Generated Petition</h2>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: "15px", lineHeight: "1.6" }}>
-            {petitionText}
-          </pre>
 
+          {/* ✅ restored metadata */}
+          {(sector || mentionedInstitutions.length > 0) && (
+            <div
+              style={{
+                margin: "14px 0 18px",
+                padding: "14px",
+                border: "1px solid #e6e6e6",
+                borderRadius: "12px",
+                background: "#fafafa",
+                fontSize: "14px",
+                lineHeight: 1.5,
+              }}
+            >
+              {sector && <div><b>Sector:</b> {sector}</div>}
+              {mentionedInstitutions.length > 0 && (
+                <div style={{ marginTop: "8px" }}>
+                  <b>Mentioned institutions:</b>
+                  <ul style={{ margin: "6px 0 0 18px" }}>
+                    {mentionedInstitutions.slice(0, 12).map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(toEmails.length > 0 || ccEmails.length > 0) && (
+                <div style={{ marginTop: "10px" }}>
+                  {toEmails.length > 0 && <div><b>To:</b> {toEmails.join(", ")}</div>}
+                  {ccEmails.length > 0 && <div><b>CC:</b> {ccEmails.join(", ")}</div>}
+                </div>
+              )}
+            </div>
+          )}
+
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: "15px", lineHeight: "1.6" }}>{petitionText}</pre>
+
+          {/* ✅ Evidence/Download PDF button restored */}
           <button
             onClick={handleDownloadPdf}
             style={{
@@ -435,16 +687,20 @@ export default function App() {
               cursor: "pointer",
             }}
           >
-            Download PDF (Locks After Download)
+            Download PDF (Evidence)
           </button>
 
+          {/* ✅ Send email button restored */}
           {mailto && (
             <a
               href={mailto}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
-                setTimeout(() => relockNow(), 1000);
+                // ✅ only relock for non-admin
+                if (!adminActive) {
+                  setTimeout(() => relockNow(), 1000);
+                }
               }}
               style={{
                 display: "block",
@@ -460,7 +716,7 @@ export default function App() {
                 maxWidth: "400px",
               }}
             >
-              Open Email & Send Petition (Locks After Click)
+              Open Email & Send Petition
             </a>
           )}
         </div>
