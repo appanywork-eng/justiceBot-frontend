@@ -31,7 +31,11 @@ export default function App() {
   const [adminActive, setAdminActive] = useState(false);
 
   // Your live Render backend
-  const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
+  const API_BASE = String(
+    import.meta.env.VITE_API_BASE_URL || "/api"
+  )
+    .trim()
+    .replace(/\/+$/, "");
 
   // ---- hidden admin trigger (tap PD logo 5 times)
   const tapCountRef = useRef(0);

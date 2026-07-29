@@ -10,7 +10,11 @@ export default function App() {
   const [preview, setPreview] = useState("");
 
   // FIXED: Your live Render backend (this is the only line that matters)
-  const API_BASE = "https://justicebot-backend-6pzy.onrender.com";
+  const API_BASE = String(
+    import.meta.env.VITE_API_BASE_URL || "/api"
+  )
+    .trim()
+    .replace(/\/+$/, "");
 
   async function handleGenerate(e) {
     e.preventDefault();

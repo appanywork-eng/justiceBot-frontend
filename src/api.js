@@ -1,4 +1,8 @@
-const API_URL = "https://justicebot-backend-6pzy.onrender.com";
+const API_URL = String(
+  import.meta.env.VITE_API_BASE_URL || "/api"
+)
+  .trim()
+  .replace(/\/+$/, "");
 
 export async function generatePetition(form) {
   try {
