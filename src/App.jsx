@@ -235,7 +235,18 @@ export default function App() {
         return;
       }
 
-      if (!res.ok) throw new Error(data.error || `Unlock error ${res.status}`);
+      if (!res.ok) {
+        const unlockError =
+          new Error(
+            data.error ||
+              `Unlock error ${res.status}`
+          );
+
+        unlockError.status =
+          res.status;
+
+        throw unlockError;
+      }
 
       if (data.ok && data.unlocked) {
         setUnlocked(true);
@@ -262,7 +273,39 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      setError(err?.message || "Verification failed. If charged, contact support.");
+
+      const expired =
+        err?.status === 404 ||
+        /petition expired/i.test(
+          String(
+            err?.message || ""
+          )
+        );
+
+      if (expired) {
+        localStorage.removeItem(
+          "pd_pending_tx_ref"
+        );
+
+        localStorage.removeItem(
+          "pd_last_tx_ref"
+        );
+
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname
+        );
+
+        setError(
+          "This petition session has expired. Generate a new petition, or use Contact Support if payment was already made."
+        );
+      } else {
+        setError(
+          err?.message ||
+            "Verification failed. If charged, contact support."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -307,12 +350,25 @@ export default function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const returnedTxRef = urlParams.get("tx_ref");
 
-    const pending = localStorage.getItem("pd_pending_tx_ref");
-    const last = localStorage.getItem("pd_last_tx_ref");
+    const pending =
+      localStorage.getItem(
+        "pd_pending_tx_ref"
+      );
 
-    const refToUse = returnedTxRef || pending || last;
+    /*
+     * Only retry an actual payment
+     * return or pending payment.
+     * A previously generated reference
+     * must not trigger an automatic
+     * unlock on every homepage visit.
+     */
+    const refToUse =
+      returnedTxRef ||
+      pending;
 
-    if (refToUse) unlockByTxRef(refToUse);
+    if (refToUse) {
+      unlockByTxRef(refToUse);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
