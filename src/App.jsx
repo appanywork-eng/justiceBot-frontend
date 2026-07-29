@@ -1,12 +1,167 @@
 // src/App.jsx
 import { useEffect, useRef, useState } from "react";
 
+function deliveryMethodLabel(
+  value
+) {
+  const labels = {
+    physical_filing:
+      "Physical filing at the registry",
+    email_or_walk_in:
+      "Verified email or walk-in submission",
+    personal_delivery:
+      "Personal delivery to the landlord or property manager",
+  };
+
+  return (
+    labels[value] ||
+    String(value || "")
+      .replace(/_/g, " ")
+  );
+}
+
+function jurisdictionLabel(
+  value
+) {
+  const labels = {
+    fct:
+      "Federal Capital Territory",
+    lagos:
+      "Lagos State",
+    other:
+      "Other or unconfirmed jurisdiction",
+  };
+
+  return (
+    labels[value] ||
+    value ||
+    "Not specified"
+  );
+}
+
+function RoutingDecisionCard({
+  decision,
+  emailRoutingAvailable,
+}) {
+  if (
+    !decision ||
+    decision.matched !== true
+  ) {
+    return null;
+  }
+
+  const emailAvailable =
+    emailRoutingAvailable === true;
+
+  return (
+    <section
+      style={{
+        margin: "22px 0",
+        padding: "20px",
+        border:
+          "1px solid #a7cfad",
+        borderRadius: "14px",
+        background:
+          "#f1fff3",
+        color: "#143b1c",
+        lineHeight: 1.6,
+      }}
+    >
+      <h3
+        style={{
+          margin:
+            "0 0 14px",
+          color: "#006600",
+          fontSize: "20px",
+        }}
+      >
+        Verified delivery route
+      </h3>
+
+      <div>
+        <strong>
+          Document:
+        </strong>{" "}
+        {
+          decision.documentPurpose
+        }
+      </div>
+
+      <div>
+        <strong>
+          Recipient:
+        </strong>{" "}
+        {
+          decision.primaryInstitution
+        }
+      </div>
+
+      <div>
+        <strong>
+          Jurisdiction:
+        </strong>{" "}
+        {jurisdictionLabel(
+          decision.jurisdiction
+        )}
+      </div>
+
+      <div>
+        <strong>
+          Delivery:
+        </strong>{" "}
+        {deliveryMethodLabel(
+          decision.deliveryMethod
+        )}
+      </div>
+
+      {decision.routingNote && (
+        <p
+          style={{
+            margin:
+              "14px 0 0",
+          }}
+        >
+          {
+            decision.routingNote
+          }
+        </p>
+      )}
+
+      <div
+        style={{
+          marginTop: "15px",
+          padding: "12px",
+          borderRadius: "10px",
+          background:
+            emailAvailable
+              ? "#e4f8e8"
+              : "#fff7df",
+          border:
+            emailAvailable
+              ? "1px solid #95c99f"
+              : "1px solid #e0c77b",
+          fontWeight: "700",
+        }}
+      >
+        {emailAvailable
+          ? "A verified email route will be available after the document is unlocked."
+          : "No verified email route is available for this recipient. Unlock the document, download or print it, and follow the filing or delivery instructions above."}
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [fullName, setFullName] = useState("");
   const [address, setAddress] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
+
+  const [
+    disputeLocation,
+    setDisputeLocation,
+  ] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -24,6 +179,16 @@ export default function App() {
   const [toEmails, setToEmails] = useState([]);
   const [ccEmails, setCcEmails] = useState([]);
   const [mailto, setMailto] = useState("");
+
+  const [
+    routingDecision,
+    setRoutingDecision,
+  ] = useState(null);
+
+  const [
+    emailRoutingAvailable,
+    setEmailRoutingAvailable,
+  ] = useState(false);
 
   // ✅ Admin mode (30 mins)
   const [adminModalOpen, setAdminModalOpen] = useState(false);
@@ -127,13 +292,20 @@ export default function App() {
     setToEmails([]);
     setCcEmails([]);
     setMailto("");
+    setRoutingDecision(null);
+    setEmailRoutingAvailable(false);
 
     try {
       const res = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          complaint: description.trim(),
+          complaint:
+            description.trim(),
+
+          disputeLocation:
+            disputeLocation.trim(),
+
           petitioner: {
             fullName: fullName.trim(),
             address: address.trim(),
@@ -146,9 +318,31 @@ export default function App() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
 
-      setPreview(data.preview || "");
-      setTxRef(data.tx_ref || "");
-      setNeedsPayment(data.needsPayment !== false);
+      setPreview(
+        data.preview || ""
+      );
+
+      setTxRef(
+        data.tx_ref || ""
+      );
+
+      setNeedsPayment(
+        data.needsPayment !== false
+      );
+
+      setSector(
+        data.sector || ""
+      );
+
+      setRoutingDecision(
+        data.routingDecision ||
+          null
+      );
+
+      setEmailRoutingAvailable(
+        data.emailRoutingAvailable ===
+          true
+      );
 
       if (data.tx_ref) {
         localStorage.setItem("pd_last_tx_ref", data.tx_ref);
@@ -253,11 +447,56 @@ export default function App() {
         setPetitionText(data.petition || "");
 
         // ✅ restored details
-        setSector(data.sector || "");
-        setMentionedInstitutions(data.mentionedInstitutions || []);
-        setToEmails(data.to || []);
-        setCcEmails(data.cc || []);
-        setMailto(data.mailto || "");
+        setSector(
+          data.sector || ""
+        );
+
+        setMentionedInstitutions([
+          ...(
+            data.mentionedInstitutions ||
+            []
+          ),
+          ...(
+            data.toInstitutions ||
+            []
+          ),
+          ...(
+            data.ccInstitutions ||
+            []
+          ),
+        ].filter(
+          (
+            value,
+            index,
+            values
+          ) =>
+            value &&
+            values.indexOf(
+              value
+            ) === index
+        ));
+
+        setToEmails(
+          data.to || []
+        );
+
+        setCcEmails(
+          data.cc || []
+        );
+
+        setMailto(
+          data.mailto || ""
+        );
+
+        setRoutingDecision(
+          data.routingDecision ||
+            null
+        );
+
+        setEmailRoutingAvailable(
+          data.emailRoutingAvailable ===
+            true
+        );
 
         // only clear tx refs when paid unlock (admin should not wipe)
         if (!data.admin) {
@@ -336,6 +575,8 @@ export default function App() {
     setToEmails([]);
     setCcEmails([]);
     setMailto("");
+    setRoutingDecision(null);
+    setEmailRoutingAvailable(false);
   }
 
   // ===========
@@ -649,8 +890,63 @@ export default function App() {
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Full Name</label>
             <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
 
-            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Address</label>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
+            <label
+              style={{
+                fontWeight: "600",
+                color: "#222",
+                fontSize: "15px",
+              }}
+            >
+              Your Address
+            </label>
+
+            <input
+              value={address}
+              onChange={(event) =>
+                setAddress(
+                  event.target.value
+                )
+              }
+              style={inputStyle}
+            />
+
+            <label
+              style={{
+                fontWeight: "600",
+                color: "#222",
+                fontSize: "15px",
+              }}
+            >
+              Where did this issue occur?
+            </label>
+
+            <input
+              value={
+                disputeLocation
+              }
+              onChange={(event) =>
+                setDisputeLocation(
+                  event.target.value
+                )
+              }
+              style={inputStyle}
+              placeholder="State, FCT, city or country"
+              required
+            />
+
+            <div
+              style={{
+                marginTop: "-14px",
+                color: "#555",
+                fontSize: "13px",
+                lineHeight: 1.45,
+              }}
+            >
+              This location helps
+              PetitionDesk select the
+              proper institution and
+              delivery method.
+            </div>
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Email</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
@@ -684,6 +980,15 @@ export default function App() {
 
           {needsPayment && (
             <div style={{ marginTop: "40px" }}>
+              <RoutingDecisionCard
+                decision={
+                  routingDecision
+                }
+                emailRoutingAvailable={
+                  emailRoutingAvailable
+                }
+              />
+
               <h2 style={{ color: "#006600", textAlign: "center", marginBottom: "20px" }}>
                 Petition Preview
               </h2>
@@ -741,7 +1046,12 @@ export default function App() {
                   cursor: loading ? "not-allowed" : "pointer",
                 }}
               >
-                {loading ? "Processing..." : "Pay ₦1,050 to Unlock Full Petition"}
+                {loading
+                  ? "Processing..."
+                  : routingDecision?.routeKey ===
+                    "formal_notice"
+                  ? "Pay ₦1,050 to Unlock Full Notice"
+                  : "Pay ₦1,050 to Unlock Full Document"}
               </button>
             </div>
           )}
@@ -782,6 +1092,15 @@ export default function App() {
               )}
             </div>
           )}
+
+          <RoutingDecisionCard
+            decision={
+              routingDecision
+            }
+            emailRoutingAvailable={
+              emailRoutingAvailable
+            }
+          />
 
           <pre style={{ whiteSpace: "pre-wrap", fontSize: "15px", lineHeight: "1.6" }}>{petitionText}</pre>
 
