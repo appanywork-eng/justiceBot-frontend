@@ -30,7 +30,7 @@ export default function App() {
   const [adminKeyInput, setAdminKeyInput] = useState("");
   const [adminActive, setAdminActive] = useState(false);
 
-  // Your live Render backend
+  // PetitionDesk API endpoint
   const API_BASE = String(
     import.meta.env.VITE_API_BASE_URL || "/api"
   )
@@ -442,6 +442,64 @@ export default function App() {
           Legal AI Petition Generator
         </p>
       </div>
+
+      <nav
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          flexWrap: "wrap",
+          gap: "10px",
+          margin: "-22px 0 28px",
+        }}
+        aria-label="PetitionDesk navigation"
+      >
+        <a
+          href="/"
+          style={{
+            padding: "10px 14px",
+            border: "1px solid #c7ddca",
+            borderRadius: "10px",
+            background: "#ffffff",
+            color: "#006600",
+            textDecoration: "none",
+            fontWeight: "750",
+          }}
+        >
+          Draft Petition
+        </a>
+
+        <a
+          href="/contact"
+          style={{
+            padding: "10px 14px",
+            border: "1px solid #c7ddca",
+            borderRadius: "10px",
+            background: "#ffffff",
+            color: "#006600",
+            textDecoration: "none",
+            fontWeight: "750",
+          }}
+        >
+          Contact Support
+        </a>
+
+        {adminActive && (
+          <a
+            href="/admin/support"
+            style={{
+              padding: "10px 14px",
+              border: "1px solid #222",
+              borderRadius: "10px",
+              background: "#111111",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontWeight: "750",
+            }}
+          >
+            Support Inbox
+          </a>
+        )}
+      </nav>
 
       {/* Admin modal */}
       {adminModalOpen && (

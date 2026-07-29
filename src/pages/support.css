@@ -1,0 +1,398 @@
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #172117;
+  background: #f5f8f5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(
+      180deg,
+      #eef8ef 0,
+      #f8faf8 260px,
+      #f5f7f5 100%
+    );
+}
+
+a {
+  color: inherit;
+}
+
+.pd-page {
+  width: 100%;
+  min-height: 100vh;
+  padding: 22px 16px 50px;
+}
+
+.pd-container {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.pd-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.pd-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #075f19;
+  text-decoration: none;
+  font-weight: 900;
+  font-size: 21px;
+}
+
+.pd-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #06751e;
+  color: #ffffff;
+  box-shadow: 0 5px 14px rgba(0, 90, 24, 0.25);
+}
+
+.pd-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pd-nav a,
+.pd-link-button {
+  border: 1px solid #bdd8c2;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #075f19;
+  padding: 9px 12px;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pd-hero {
+  padding: 30px 24px;
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      135deg,
+      #045d17,
+      #07952b
+    );
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(0, 91, 25, 0.22);
+  margin-bottom: 24px;
+}
+
+.pd-hero h1 {
+  margin: 0 0 10px;
+  font-size: clamp(30px, 6vw, 46px);
+  line-height: 1.05;
+}
+
+.pd-hero p {
+  max-width: 720px;
+  margin: 0;
+  line-height: 1.65;
+  font-size: 16px;
+}
+
+.pd-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.55fr)
+    minmax(240px, 0.75fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.pd-card {
+  background: #ffffff;
+  border: 1px solid #e1e9e2;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(31, 55, 35, 0.08);
+  padding: 24px;
+}
+
+.pd-card h2,
+.pd-card h3 {
+  margin-top: 0;
+  color: #075f19;
+}
+
+.pd-field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 17px;
+}
+
+.pd-field label {
+  font-size: 14px;
+  font-weight: 800;
+  color: #253528;
+}
+
+.pd-required {
+  color: #ad1717;
+}
+
+.pd-input,
+.pd-select,
+.pd-textarea {
+  width: 100%;
+  border: 1px solid #cdd8cf;
+  border-radius: 11px;
+  background: #ffffff;
+  padding: 13px 14px;
+  color: #172117;
+  font: inherit;
+  outline: none;
+}
+
+.pd-input:focus,
+.pd-select:focus,
+.pd-textarea:focus {
+  border-color: #078729;
+  box-shadow: 0 0 0 3px rgba(7, 135, 41, 0.12);
+}
+
+.pd-textarea {
+  min-height: 150px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.pd-checkbox-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 18px 0;
+  line-height: 1.5;
+}
+
+.pd-checkbox-row input {
+  margin-top: 4px;
+  width: 18px;
+  height: 18px;
+  accent-color: #087729;
+}
+
+.pd-primary-button {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 15px 18px;
+  background: #06751e;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.pd-primary-button:hover {
+  background: #045f18;
+}
+
+.pd-primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pd-secondary-button {
+  border: 1px solid #b8d0bd;
+  border-radius: 10px;
+  padding: 10px 13px;
+  background: #ffffff;
+  color: #075f19;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pd-danger-button {
+  border: 1px solid #e1bebe;
+  border-radius: 10px;
+  padding: 10px 13px;
+  background: #fffafa;
+  color: #8b1515;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pd-message {
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 17px;
+  line-height: 1.55;
+}
+
+.pd-message-error {
+  border: 1px solid #efb8b8;
+  background: #fff1f1;
+  color: #8a1616;
+}
+
+.pd-message-success {
+  border: 1px solid #a9d7b2;
+  background: #edfff0;
+  color: #075f19;
+}
+
+.pd-reference {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px dashed #078729;
+  border-radius: 12px;
+  background: #f2fff4;
+  font-size: 18px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.pd-help-list {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.75;
+}
+
+.pd-muted {
+  color: #5c695e;
+  line-height: 1.6;
+}
+
+.pd-small {
+  font-size: 13px;
+}
+
+.pd-ticket-list {
+  display: grid;
+  gap: 17px;
+}
+
+.pd-ticket {
+  background: #ffffff;
+  border: 1px solid #dfe8e0;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 6px 20px rgba(30, 50, 33, 0.07);
+}
+
+.pd-ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.pd-ticket-ref {
+  color: #075f19;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.pd-status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #e7f5e9;
+  color: #075f19;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.pd-ticket-meta {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(180px, 1fr)
+    );
+  gap: 10px;
+  margin-bottom: 15px;
+  color: #49544b;
+  font-size: 14px;
+}
+
+.pd-ticket-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 14px;
+  border-radius: 11px;
+  background: #f7faf7;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.pd-ticket-actions {
+  display: grid;
+  grid-template-columns:
+    minmax(170px, 0.4fr)
+    minmax(260px, 1fr)
+    auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.pd-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pd-login-card {
+  max-width: 520px;
+  margin: 60px auto 0;
+}
+
+.pd-hidden-field {
+  position: absolute !important;
+  left: -10000px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}
+
+@media (max-width: 760px) {
+  .pd-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pd-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pd-ticket-header {
+    flex-direction: column;
+  }
+
+  .pd-ticket-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .pd-card,
+  .pd-hero {
+    padding: 20px;
+  }
+}
