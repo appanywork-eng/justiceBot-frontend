@@ -1,6 +1,41 @@
 // src/App.jsx
 import { useEffect, useRef, useState } from "react";
 
+function humanizeCode(
+  value
+) {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .replace(
+      /\b\w/g,
+      (character) =>
+        character.toUpperCase()
+    )
+    .trim();
+}
+
+function safeExternalUrl(
+  value
+) {
+  try {
+    const url =
+      new URL(
+        String(value || "")
+      );
+
+    if (
+      url.protocol !==
+      "https:"
+    ) {
+      return "";
+    }
+
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function deliveryMethodLabel(
   value
 ) {
@@ -38,8 +73,7 @@ function deliveryMethodLabel(
 
   return (
     labels[value] ||
-    String(value || "")
-      .replace(/_/g, " ")
+    humanizeCode(value)
   );
 }
 
@@ -80,7 +114,7 @@ function jurisdictionLabel(
 
   return (
     labels[value] ||
-    value ||
+    humanizeCode(value) ||
     "Not specified"
   );
 }
@@ -99,6 +133,15 @@ function RoutingDecisionCard({
   const emailAvailable =
     emailRoutingAvailable === true;
 
+  const blocked =
+    decision.blockGeneration ===
+    true;
+
+  const submissionUrl =
+    safeExternalUrl(
+      decision.submissionUrl
+    );
+
   const deliveryMethod =
     String(
       decision.deliveryMethod ||
@@ -106,6 +149,9 @@ function RoutingDecisionCard({
     );
 
   const usesOfficialPortal =
+    Boolean(
+      submissionUrl
+    ) ||
     deliveryMethod.includes(
       "portal"
     ) ||
@@ -113,7 +159,22 @@ function RoutingDecisionCard({
       "ticket"
     ) ||
     deliveryMethod.includes(
-      "official_directory"
+      "official"
+    ) ||
+    deliveryMethod.includes(
+      "filing"
+    ) ||
+    deliveryMethod.includes(
+      "submission"
+    ) ||
+    deliveryMethod.includes(
+      "registry"
+    ) ||
+    deliveryMethod.includes(
+      "court"
+    ) ||
+    deliveryMethod.includes(
+      "mission"
     );
 
   return (
@@ -122,11 +183,18 @@ function RoutingDecisionCard({
         margin: "22px 0",
         padding: "20px",
         border:
-          "1px solid #a7cfad",
+          blocked
+            ? "1px solid #d2a43c"
+            : "1px solid #a7cfad",
         borderRadius: "14px",
         background:
-          "#f1fff3",
-        color: "#143b1c",
+          blocked
+            ? "#fff8df"
+            : "#f1fff3",
+        color:
+          blocked
+            ? "#513800"
+            : "#143b1c",
         lineHeight: 1.6,
       }}
     >
@@ -134,12 +202,40 @@ function RoutingDecisionCard({
         style={{
           margin:
             "0 0 14px",
-          color: "#006600",
+          color:
+            blocked
+              ? "#8a5a00"
+              : "#006600",
           fontSize: "20px",
         }}
       >
-        Verified delivery route
+        {blocked
+          ? "Required next step"
+          : "Verified delivery route"}
       </h3>
+
+      {decision.userMessage && (
+        <div
+          style={{
+            marginBottom: "15px",
+            padding: "13px",
+            borderRadius: "10px",
+            background:
+              blocked
+                ? "#fff0bd"
+                : "#e8f6ea",
+            border:
+              blocked
+                ? "1px solid #d6ad42"
+                : "1px solid #a7cfad",
+            fontWeight: "700",
+          }}
+        >
+          {
+            decision.userMessage
+          }
+        </div>
+      )}
 
       <div>
         <strong>
@@ -207,23 +303,55 @@ function RoutingDecisionCard({
         </p>
       )}
 
+      {submissionUrl && (
+        <a
+          href={submissionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "block",
+            marginTop: "16px",
+            padding: "13px 16px",
+            borderRadius: "10px",
+            background:
+              blocked
+                ? "#8a5a00"
+                : "#006600",
+            color: "#ffffff",
+            textAlign: "center",
+            textDecoration: "none",
+            fontWeight: "800",
+          }}
+        >
+          {blocked
+            ? "Open Official Guidance"
+            : "Open Official Submission Channel"}
+        </a>
+      )}
+
       <div
         style={{
           marginTop: "15px",
           padding: "12px",
           borderRadius: "10px",
           background:
-            emailAvailable
+            blocked
+              ? "#fff0bd"
+              : emailAvailable
               ? "#e4f8e8"
               : "#fff7df",
           border:
-            emailAvailable
+            blocked
+              ? "1px solid #d6ad42"
+              : emailAvailable
               ? "1px solid #95c99f"
               : "1px solid #e0c77b",
           fontWeight: "700",
         }}
       >
-        {emailAvailable
+        {blocked
+          ? "PetitionDesk stopped ordinary petition generation to prevent an unsafe, legally incorrect or misdirected submission. Follow the required next step shown above."
+          : emailAvailable
           ? "A verified email route will be available after the document is unlocked."
           : usesOfficialPortal
           ? "This route uses an official portal, complaint ticket or published filing channel rather than direct email. Unlock the document and follow the routing instructions above."
@@ -424,7 +552,37 @@ export default function App() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+
+      if (!res.ok) {
+        const blockedDecision =
+          data.routingDecision ||
+          null;
+
+        setRoutingDecision(
+          blockedDecision
+        );
+
+        setSector(
+          blockedDecision?.sector ||
+          data.sector ||
+          ""
+        );
+
+        setEmailRoutingAvailable(
+          false
+        );
+
+        setNeedsPayment(
+          false
+        );
+
+        setError(
+          data.error ||
+          `Server error ${res.status}`
+        );
+
+        return;
+      }
 
       setPreview(
         data.preview || ""
@@ -1225,6 +1383,25 @@ export default function App() {
               {loading ? "Generating..." : "Generate Petition"}
             </button>
           </form>
+
+          {routingDecision
+            ?.blockGeneration ===
+            true && (
+            <div
+              style={{
+                marginTop: "28px",
+              }}
+            >
+              <RoutingDecisionCard
+                decision={
+                  routingDecision
+                }
+                emailRoutingAvailable={
+                  false
+                }
+              />
+            </div>
+          )}
 
           {needsPayment && (
             <div style={{ marginTop: "40px" }}>
