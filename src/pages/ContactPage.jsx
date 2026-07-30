@@ -3,7 +3,10 @@ import {
   useState,
 } from "react";
 
-import "./support.css";
+import BrandMark from "../components/brand/BrandMark.jsx";
+import SiteFooter from "../components/layout/SiteFooter.jsx";
+
+import "./contact.css";
 
 const API_BASE = String(
   import.meta.env.VITE_API_BASE_URL ||
@@ -221,195 +224,202 @@ export default function ContactPage() {
   }
 
   return (
-    <main className="pd-page">
-      <div className="pd-container">
-        <header className="pd-topbar">
-          <a
-            className="pd-brand"
-            href="/"
-          >
-            <span className="pd-logo">
-              PD
-            </span>
-            <span>PetitionDesk</span>
-          </a>
+    <main className="pd-contact-page">
+      <header className="pd-contact-header">
+        <div className="pd-contact-container pd-contact-header__inner">
+          <BrandMark />
 
-          <nav className="pd-nav">
+          <nav
+            className="pd-contact-navigation"
+            aria-label="Support navigation"
+          >
             <a href="/">
-              Draft Petition
+              Home
             </a>
-            <a href="/contact">
-              Contact Support
+
+            <a
+              href="/#draft-petition"
+              className="pd-contact-navigation__primary"
+            >
+              Draft
             </a>
           </nav>
-        </header>
+        </div>
+      </header>
 
-        <section className="pd-hero">
-          <h1>
-            Contact and Support
-          </h1>
+      <section className="pd-contact-hero">
+        <div className="pd-contact-container pd-contact-hero__inner">
+          <div>
+            <div className="pd-contact-eyebrow">
+              PetitionDesk support
+            </div>
 
-          <p>
-            Report a petition,
-            payment, download or
-            routing problem. You will
-            receive a unique support
-            reference after your
-            request is recorded.
-          </p>
-        </section>
+            <h1>
+              How can we help?
+            </h1>
 
+            <p>
+              Report a generation, payment, download or routing
+              problem. We will record it and give you a support
+              reference.
+            </p>
+          </div>
+
+          <div
+            className="pd-contact-hero__mark"
+            aria-hidden="true"
+          >
+            <img
+              src="/petitiondesk-mark.svg"
+              alt=""
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="pd-contact-container pd-contact-content">
         {success && (
           <section
-            className="pd-message pd-message-success"
+            className="pd-contact-message pd-contact-message--success"
             aria-live="polite"
           >
             <strong>
-              Your support request
-              has been received.
+              Support request received
             </strong>
 
-            <div className="pd-reference">
-              {success.supportRef}
-            </div>
+            <p>
+              Save this reference:
+            </p>
 
-            <div>
-              Save this reference.
-              It identifies your
-              request when contacting
-              PetitionDesk.
+            <div className="pd-contact-reference">
+              {success.supportRef}
             </div>
           </section>
         )}
 
         {error && (
           <section
-            className="pd-message pd-message-error"
+            className="pd-contact-message pd-contact-message--error"
             role="alert"
           >
             {error}
           </section>
         )}
 
-        <div className="pd-grid">
-          <section className="pd-card">
-            <h2>
-              Submit a support request
-            </h2>
+        <div className="pd-contact-grid">
+          <section className="pd-contact-card pd-contact-form-card">
+            <div className="pd-contact-card__heading">
+              <span className="pd-contact-eyebrow">
+                Support request
+              </span>
+
+              <h2>
+                Tell us what went wrong
+              </h2>
+
+              <p>
+                Required fields are marked with an asterisk.
+              </p>
+            </div>
 
             <form
+              className="pd-contact-form"
               onSubmit={submitTicket}
             >
-              <div className="pd-field">
-                <label htmlFor="fullName">
-                  Full name{" "}
-                  <span className="pd-required">
-                    *
-                  </span>
-                </label>
+              <div className="pd-contact-form__row">
+                <div className="pd-contact-field">
+                  <label htmlFor="fullName">
+                    Full name
+                    <span className="pd-contact-required">
+                      *
+                    </span>
+                  </label>
 
-                <input
-                  id="fullName"
-                  name="fullName"
-                  className="pd-input"
-                  value={
-                    form.fullName
-                  }
-                  onChange={
-                    updateField
-                  }
-                  maxLength="120"
-                  autoComplete="name"
-                  required
-                />
+                  <input
+                    id="fullName"
+                    name="fullName"
+                    value={form.fullName}
+                    onChange={updateField}
+                    maxLength="120"
+                    autoComplete="name"
+                    required
+                  />
+                </div>
+
+                <div className="pd-contact-field">
+                  <label htmlFor="email">
+                    Email
+                    <span className="pd-contact-required">
+                      *
+                    </span>
+                  </label>
+
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={form.email}
+                    onChange={updateField}
+                    maxLength="200"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="pd-field">
-                <label htmlFor="email">
-                  Email address{" "}
-                  <span className="pd-required">
-                    *
-                  </span>
-                </label>
+              <div className="pd-contact-form__row">
+                <div className="pd-contact-field">
+                  <label htmlFor="phone">
+                    Phone
+                    <span className="pd-contact-optional">
+                      Optional
+                    </span>
+                  </label>
 
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  className="pd-input"
-                  value={form.email}
-                  onChange={
-                    updateField
-                  }
-                  maxLength="200"
-                  autoComplete="email"
-                  required
-                />
+                  <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    value={form.phone}
+                    onChange={updateField}
+                    maxLength="40"
+                    autoComplete="tel"
+                  />
+                </div>
+
+                <div className="pd-contact-field">
+                  <label htmlFor="category">
+                    Category
+                    <span className="pd-contact-required">
+                      *
+                    </span>
+                  </label>
+
+                  <select
+                    id="category"
+                    name="category"
+                    value={form.category}
+                    onChange={updateField}
+                    required
+                  >
+                    {categories.map(
+                      (category) => (
+                        <option
+                          key={category.id}
+                          value={category.id}
+                        >
+                          {category.label}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
               </div>
 
-              <div className="pd-field">
-                <label htmlFor="phone">
-                  Phone number
-                  (optional)
-                </label>
-
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  className="pd-input"
-                  value={form.phone}
-                  onChange={
-                    updateField
-                  }
-                  maxLength="40"
-                  autoComplete="tel"
-                />
-              </div>
-
-              <div className="pd-field">
-                <label htmlFor="category">
-                  Support category{" "}
-                  <span className="pd-required">
-                    *
-                  </span>
-                </label>
-
-                <select
-                  id="category"
-                  name="category"
-                  className="pd-select"
-                  value={
-                    form.category
-                  }
-                  onChange={
-                    updateField
-                  }
-                  required
-                >
-                  {categories.map(
-                    (category) => (
-                      <option
-                        key={
-                          category.id
-                        }
-                        value={
-                          category.id
-                        }
-                      >
-                        {
-                          category.label
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
-
-              <div className="pd-field">
+              <div className="pd-contact-field">
                 <label htmlFor="subject">
-                  Subject{" "}
-                  <span className="pd-required">
+                  Subject
+                  <span className="pd-contact-required">
                     *
                   </span>
                 </label>
@@ -417,65 +427,55 @@ export default function ContactPage() {
                 <input
                   id="subject"
                   name="subject"
-                  className="pd-input"
-                  value={
-                    form.subject
-                  }
-                  onChange={
-                    updateField
-                  }
+                  value={form.subject}
+                  onChange={updateField}
                   minLength="3"
                   maxLength="160"
                   required
                 />
               </div>
 
-              <div className="pd-field">
-                <label htmlFor="petitionRef">
-                  Petition transaction
-                  reference
-                  (optional)
-                </label>
+              <div className="pd-contact-form__row">
+                <div className="pd-contact-field">
+                  <label htmlFor="petitionRef">
+                    Petition reference
+                    <span className="pd-contact-optional">
+                      Optional
+                    </span>
+                  </label>
 
-                <input
-                  id="petitionRef"
-                  name="petitionRef"
-                  className="pd-input"
-                  value={
-                    form.petitionRef
-                  }
-                  onChange={
-                    updateField
-                  }
-                  maxLength="120"
-                  placeholder="Example: pd_..."
-                />
+                  <input
+                    id="petitionRef"
+                    name="petitionRef"
+                    value={form.petitionRef}
+                    onChange={updateField}
+                    maxLength="120"
+                    placeholder="pd_..."
+                  />
+                </div>
+
+                <div className="pd-contact-field">
+                  <label htmlFor="paymentRef">
+                    Payment reference
+                    <span className="pd-contact-optional">
+                      Optional
+                    </span>
+                  </label>
+
+                  <input
+                    id="paymentRef"
+                    name="paymentRef"
+                    value={form.paymentRef}
+                    onChange={updateField}
+                    maxLength="120"
+                  />
+                </div>
               </div>
 
-              <div className="pd-field">
-                <label htmlFor="paymentRef">
-                  Payment reference
-                  (optional)
-                </label>
-
-                <input
-                  id="paymentRef"
-                  name="paymentRef"
-                  className="pd-input"
-                  value={
-                    form.paymentRef
-                  }
-                  onChange={
-                    updateField
-                  }
-                  maxLength="120"
-                />
-              </div>
-
-              <div className="pd-field">
+              <div className="pd-contact-field">
                 <label htmlFor="message">
-                  Message{" "}
-                  <span className="pd-required">
+                  What happened?
+                  <span className="pd-contact-required">
                     *
                   </span>
                 </label>
@@ -483,21 +483,16 @@ export default function ContactPage() {
                 <textarea
                   id="message"
                   name="message"
-                  className="pd-textarea"
-                  value={
-                    form.message
-                  }
-                  onChange={
-                    updateField
-                  }
+                  value={form.message}
+                  onChange={updateField}
                   minLength="10"
                   maxLength="5000"
-                  placeholder="Explain what happened, what you expected, and any error message you received."
+                  placeholder="Describe the problem and include any error message."
                   required
                 />
               </div>
 
-              <div className="pd-hidden-field">
+              <div className="pd-contact-hidden">
                 <label htmlFor="website">
                   Website
                 </label>
@@ -505,110 +500,79 @@ export default function ContactPage() {
                 <input
                   id="website"
                   name="website"
-                  value={
-                    form.website
-                  }
-                  onChange={
-                    updateField
-                  }
+                  value={form.website}
+                  onChange={updateField}
                   tabIndex="-1"
                   autoComplete="off"
                 />
               </div>
 
-              <label className="pd-checkbox-row">
+              <label className="pd-contact-consent">
                 <input
                   name="consent"
                   type="checkbox"
-                  checked={
-                    form.consent
-                  }
-                  onChange={
-                    updateField
-                  }
+                  checked={form.consent}
+                  onChange={updateField}
                   required
                 />
 
                 <span>
-                  I consent to
-                  PetitionDesk using
-                  the information
-                  supplied here to
-                  review and respond
-                  to this support
-                  request.
+                  I consent to PetitionDesk using this information
+                  to review and respond to my support request.
                 </span>
               </label>
 
               <button
-                className="pd-primary-button"
+                className="pd-contact-submit"
                 type="submit"
                 disabled={submitting}
               >
                 {submitting
                   ? "Submitting..."
-                  : "Submit Support Request"}
+                  : "Submit Request"}
               </button>
             </form>
           </section>
 
-          <aside className="pd-card">
+          <aside className="pd-contact-card pd-contact-help">
+            <div className="pd-contact-help__icon">
+              i
+            </div>
+
             <h3>
-              Before submitting
+              Include useful details
             </h3>
 
-            <ul className="pd-help-list">
+            <ul>
               <li>
-                Include your petition
-                reference for
-                generation or unlock
+                Add the petition reference for generation or unlock
                 problems.
               </li>
+
               <li>
-                Include your payment
-                reference when a
-                payment was made.
+                Add the payment reference when payment was made.
               </li>
+
               <li>
-                Do not submit bank
-                card details,
-                passwords, NIN or
+                Never submit card details, passwords, NIN or
                 confidential evidence.
-              </li>
-              <li>
-                Report incorrect
-                institution details
-                using the wrong
-                routing category.
               </li>
             </ul>
 
-            <h3
-              style={{
-                marginTop: "24px",
-              }}
-            >
-              Support email
-            </h3>
+            <div className="pd-contact-email">
+              <span>
+                Support email
+              </span>
 
-            <p className="pd-muted">
-              <a
-                href={`mailto:${supportEmail}`}
-              >
+              <a href={`mailto:${supportEmail}`}>
                 {supportEmail}
               </a>
-            </p>
-
-            <p className="pd-muted pd-small">
-              The online form records
-              your request directly in
-              the protected
-              PetitionDesk support
-              inbox.
-            </p>
+            </div>
           </aside>
         </div>
       </div>
+
+      <SiteFooter />
     </main>
   );
 }

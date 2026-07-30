@@ -11,12 +11,21 @@ export default defineConfig({
       registerType: "autoUpdate",
 
       // helps Chrome detect manifest assets
-      includeAssets: ["logo.jpg", "pwa-192.png", "pwa-512.png", "pwa-512-maskable.png"],
+      includeAssets: [
+        "petitiondesk-mark.svg",
+        "petitiondesk-logo.svg",
+        "favicon.svg",
+        "logo.jpg",
+        "pwa-192.png",
+        "pwa-512.png",
+        "pwa-512-maskable.png"
+      ],
 
       manifest: {
         name: "PetitionDesk",
         short_name: "PetitionDesk",
-        description: "Legal AI Petition Generator",
+        description:
+          "Write a clear petition and find the right delivery route.",
         start_url: "/",
         scope: "/",
         display: "standalone",

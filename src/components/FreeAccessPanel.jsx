@@ -36,6 +36,7 @@ export default function FreeAccessPanel({
 
   return (
     <section
+      className="pd-free-access-panel"
       style={{
         margin:
           "0 0 26px",
@@ -87,7 +88,7 @@ export default function FreeAccessPanel({
                 "uppercase",
             }}
           >
-            First-time access
+            Verified access
           </div>
 
           <h2
@@ -102,7 +103,7 @@ export default function FreeAccessPanel({
                 1.25,
             }}
           >
-            Your first two complete petitions are free
+            2 free petitions to get started
           </h2>
 
           <p
@@ -117,7 +118,7 @@ export default function FreeAccessPanel({
                 1.6,
             }}
           >
-            Verify your email, describe what happened and review the recommended authority. A free use is counted only when the complete petition is successfully unlocked.
+            Verify your email. A free use is counted only when a complete petition is unlocked.
           </p>
         </div>
 

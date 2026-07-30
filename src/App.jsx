@@ -2,6 +2,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import FreeAccessPanel from "./components/FreeAccessPanel.jsx";
+import HeroSection from "./components/layout/HeroSection.jsx";
+import HowItWorks from "./components/layout/HowItWorks.jsx";
+import PetitionProgress from "./components/layout/PetitionProgress.jsx";
+import SiteFooter from "./components/layout/SiteFooter.jsx";
+import SiteHeader from "./components/layout/SiteHeader.jsx";
+import SupportedIssues from "./components/layout/SupportedIssues.jsx";
 import useFirebaseIdentity from "./hooks/useFirebaseIdentity.js";
 
 function humanizeCode(
@@ -182,6 +188,7 @@ function RoutingDecisionCard({
 
   return (
     <section
+      className="pd-routing-card"
       style={{
         margin: "22px 0",
         padding: "20px",
@@ -214,7 +221,7 @@ function RoutingDecisionCard({
       >
         {blocked
           ? "Required next step"
-          : "Verified delivery route"}
+          : "Recommended delivery route"}
       </h3>
 
       {decision.userMessage && (
@@ -1249,189 +1256,33 @@ export default function App() {
   }, []);
 
   return (
-    <div
-      style={{
-        maxWidth: "960px",
-        margin: "0 auto",
-        padding: "20px",
-        backgroundColor: "#f8f9fa",
-        minHeight: "100vh",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      }}
-    >
-      <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-100%); }
+    <div className="pd-app-shell">
+
+      <SiteHeader
+        onLogoActivate={
+          handleLogoTap
         }
-      `}</style>
+        adminActive={
+          adminActive
+        }
+      />
 
-      {/* Moving Disclaimer */}
-      <div
-        style={{
-          backgroundColor: "#006600",
-          color: "#ffffff",
-          padding: "14px 0",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          marginBottom: "24px",
-          borderRadius: "12px",
-          boxShadow: "0 4px 15px rgba(0, 102, 0, 0.2)",
-        }}
-      >
-        <div
-          style={{
-            display: "inline-block",
-            paddingLeft: "100%",
-            animation: "marquee 35s linear infinite",
-            fontSize: "15px",
-            fontWeight: "500",
-          }}
-        >
-          ✨ PetitionDesk is an advanced AI-powered tool designed to help you draft professional petitions quickly and clearly.
-          It provides structured drafts based on your input. For official submission, always review with a qualified lawyer.
-          Your peace of mind matters to us. ✨ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-          ✨ PetitionDesk — Empowering your voice with smart, professional drafting assistance...
-        </div>
-      </div>
+      <HeroSection />
 
-      {/* Admin banner */}
-      {adminActive && (
-        <div
-          style={{
-            background: "#111",
-            color: "#fff",
-            padding: "10px 14px",
-            borderRadius: "10px",
-            marginBottom: "14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            fontSize: "14px",
-          }}
-        >
-          <span>🛠 Admin Test Mode (unlocked actions won’t re-lock)</span>
-          <button
-            onClick={clearAdmin}
-            style={{
-              background: "#fff",
-              color: "#111",
-              border: "none",
-              borderRadius: "8px",
-              padding: "6px 10px",
-              cursor: "pointer",
-              fontWeight: "700",
-            }}
-          >
-            Exit Admin
-          </button>
-        </div>
-      )}
+      <main className="pd-main-content">
+        <HowItWorks />
 
-      {/* Header */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #006600, #009900)",
-          color: "#ffffff",
-          padding: "28px 20px",
-          borderRadius: "16px",
-          textAlign: "center",
-          marginBottom: "40px",
-          boxShadow: "0 6px 20px rgba(0, 102, 0, 0.3)",
-          position: "relative",
-        }}
-      >
-        <div
-          onClick={handleLogoTap}
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            backgroundColor: "#ffffff",
-            color: "#006600",
-            width: "70px",
-            height: "70px",
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "32px",
-            fontWeight: "bold",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
-            userSelect: "none",
-            cursor: "pointer",
-          }}
-          title="(Admin: tap 5 times)"
-        >
-          PD
-        </div>
+        <SupportedIssues />
 
-        <h1 style={{ fontSize: "42px", fontWeight: "900", margin: "0 0 8px 0", letterSpacing: "-1px" }}>
-          PetitionDesk
-        </h1>
-
-        <p style={{ fontSize: "18px", fontWeight: "500", margin: 0, opacity: 0.95 }}>
-          Legal AI Petition Generator
-        </p>
-      </div>
-
-      <nav
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          flexWrap: "wrap",
-          gap: "10px",
-          margin: "-22px 0 28px",
-        }}
-        aria-label="PetitionDesk navigation"
-      >
-        <a
-          href="/"
-          style={{
-            padding: "10px 14px",
-            border: "1px solid #c7ddca",
-            borderRadius: "10px",
-            background: "#ffffff",
-            color: "#006600",
-            textDecoration: "none",
-            fontWeight: "750",
-          }}
-        >
-          Draft Petition
-        </a>
-
-        <a
-          href="/contact"
-          style={{
-            padding: "10px 14px",
-            border: "1px solid #c7ddca",
-            borderRadius: "10px",
-            background: "#ffffff",
-            color: "#006600",
-            textDecoration: "none",
-            fontWeight: "750",
-          }}
-        >
-          Contact Support
-        </a>
-
-        {adminActive && (
-          <a
-            href="/admin/support"
-            style={{
-              padding: "10px 14px",
-              border: "1px solid #222",
-              borderRadius: "10px",
-              background: "#111111",
-              color: "#ffffff",
-              textDecoration: "none",
-              fontWeight: "750",
-            }}
-          >
-            Support Inbox
-          </a>
-        )}
-      </nav>
+        <PetitionProgress
+          currentStep={
+            unlocked
+              ? 3
+              : preview
+              ? 2
+              : 1
+          }
+        />
 
       {/* Admin modal */}
       {adminModalOpen && (
@@ -1508,6 +1359,7 @@ export default function App() {
         </div>
       )}
 
+      <section id="draft-petition">
       <FreeAccessPanel
         enabled={
           accessStatus.enabled
@@ -1560,6 +1412,8 @@ export default function App() {
       {!unlocked ? (
         <>
           <form
+            id="petition-form"
+            className="pd-form-card"
             onSubmit={handleGenerate}
             style={{
               display: "flex",
@@ -1571,6 +1425,20 @@ export default function App() {
               boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
             }}
           >
+            <div className="pd-form-intro">
+              <div className="pd-eyebrow">
+                Step 1 · Describe the issue
+              </div>
+
+              <h2>
+                Draft your petition
+              </h2>
+
+              <p>
+                Share the facts. We will structure the petition and suggest the right route.
+              </p>
+            </div>
+
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Full Name</label>
             <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
 
@@ -1626,10 +1494,7 @@ export default function App() {
                 lineHeight: 1.45,
               }}
             >
-              This location helps
-              PetitionDesk select the
-              proper institution and
-              delivery method.
+              Used to choose the right authority and delivery route.
             </div>
 
             <label
@@ -1663,11 +1528,7 @@ export default function App() {
                 lineHeight: 1.45,
               }}
             >
-              Enter the exact name where
-              possible. PetitionDesk will
-              use it to identify the
-              provider, regulator or
-              responsible institution.
+              Use the exact organisation name where possible.
             </div>
 
             <label
@@ -1724,11 +1585,7 @@ export default function App() {
                 lineHeight: 1.45,
               }}
             >
-              This prevents PetitionDesk
-              from sending a first complaint
-              directly to a regulator when
-              the provider should be contacted
-              first.
+              Helps prevent premature escalation.
             </div>
 
             {escalationStage ===
@@ -1871,7 +1728,7 @@ export default function App() {
                 : accessStatus.enabled &&
                   accessStatus.freeRemaining > 0
                 ? "Generate My Free Petition"
-                : "Generate Petition Preview"}
+                : "Generate Preview"}
             </button>
           </form>
 
@@ -1895,7 +1752,7 @@ export default function App() {
           )}
 
           {preview && (
-            <div style={{ marginTop: "40px" }}>
+            <div className="pd-preview-section">
               <RoutingDecisionCard
                 decision={
                   routingDecision
@@ -1992,7 +1849,7 @@ export default function App() {
           )}
         </>
       ) : (
-        <div style={{ background: "#ffffff", padding: "32px", borderRadius: "16px", boxShadow: "0 6px 20px rgba(0,0,0,0.1)" }}>
+        <div className="pd-generated-section" style={{ background: "#ffffff", padding: "32px", borderRadius: "16px", boxShadow: "0 6px 20px rgba(0,0,0,0.1)" }}>
           <h2 style={{ color: "#006600", textAlign: "center" }}>Your Generated Petition</h2>
 
           {/* ✅ restored metadata */}
@@ -2095,10 +1952,23 @@ export default function App() {
       )}
 
       {error && (
-        <div style={{ color: "red", textAlign: "center", marginTop: "20px", fontWeight: "bold" }}>
+        <div
+          className="pd-error-message"
+          style={{
+            color: "red",
+            textAlign: "center",
+            marginTop: "20px",
+            fontWeight: "bold",
+          }}
+        >
           {error}
         </div>
       )}
+
+      </section>
+      </main>
+
+      <SiteFooter />
     </div>
   );
 }

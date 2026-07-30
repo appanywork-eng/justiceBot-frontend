@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 
+import "./styles/premium.css";
+
 import App from "./App.jsx";
 import ContactPage from "./pages/ContactPage.jsx";
 import AdminSupportPage from "./pages/AdminSupportPage.jsx";
