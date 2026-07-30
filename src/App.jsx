@@ -7,10 +7,33 @@ function deliveryMethodLabel(
   const labels = {
     physical_filing:
       "Physical filing at the registry",
+
     email_or_walk_in:
       "Verified email or walk-in submission",
+
     personal_delivery:
       "Personal delivery to the landlord or property manager",
+
+    email_or_provider_complaint_channel:
+      "Verified email or provider complaint channel",
+
+    verified_email_or_physical_filing:
+      "Verified email or physical filing",
+
+    official_directory_or_physical_filing:
+      "Official directory or physical filing",
+
+    official_ticket_or_consumer_forum:
+      "Official complaint ticket or consumer forum",
+
+    official_consumer_complaint_portal:
+      "Official consumer complaint portal",
+
+    verified_email_or_complaints_portal:
+      "Verified email or official complaints portal",
+
+    verified_email_or_consumer_portal:
+      "Verified email or consumer-protection portal",
   };
 
   return (
@@ -26,10 +49,33 @@ function jurisdictionLabel(
   const labels = {
     fct:
       "Federal Capital Territory",
+
     lagos:
       "Lagos State",
+
     other:
       "Other or unconfirmed jurisdiction",
+
+    national_regulated_service:
+      "Nigeria — regulated service provider",
+
+    state_electricity_market:
+      "State electricity market",
+
+    nerc_consumer_forum:
+      "NERC consumer-forum jurisdiction",
+
+    federal_electricity_market:
+      "Federal electricity-market jurisdiction",
+
+    national_telecommunications_regulator:
+      "Nigeria — telecommunications regulation",
+
+    national_financial_regulator:
+      "Nigeria — financial-services regulation",
+
+    national_civil_aviation_regulator:
+      "Nigeria — civil-aviation regulation",
   };
 
   return (
@@ -52,6 +98,23 @@ function RoutingDecisionCard({
 
   const emailAvailable =
     emailRoutingAvailable === true;
+
+  const deliveryMethod =
+    String(
+      decision.deliveryMethod ||
+        ""
+    );
+
+  const usesOfficialPortal =
+    deliveryMethod.includes(
+      "portal"
+    ) ||
+    deliveryMethod.includes(
+      "ticket"
+    ) ||
+    deliveryMethod.includes(
+      "official_directory"
+    );
 
   return (
     <section
@@ -95,6 +158,23 @@ function RoutingDecisionCard({
           decision.primaryInstitution
         }
       </div>
+
+      {Array.isArray(
+        decision.ccInstitutions
+      ) &&
+        decision.ccInstitutions.length >
+          0 && (
+          <div>
+            <strong>
+              Also notify:
+            </strong>{" "}
+            {
+              decision.ccInstitutions.join(
+                ", "
+              )
+            }
+          </div>
+        )}
 
       <div>
         <strong>
@@ -145,6 +225,8 @@ function RoutingDecisionCard({
       >
         {emailAvailable
           ? "A verified email route will be available after the document is unlocked."
+          : usesOfficialPortal
+          ? "This route uses an official portal, complaint ticket or published filing channel rather than direct email. Unlock the document and follow the routing instructions above."
           : "No verified email route is available for this recipient. Unlock the document, download or print it, and follow the filing or delivery instructions above."}
       </div>
     </section>
@@ -161,6 +243,21 @@ export default function App() {
   const [
     disputeLocation,
     setDisputeLocation,
+  ] = useState("");
+
+  const [
+    institutionName,
+    setInstitutionName,
+  ] = useState("");
+
+  const [
+    escalationStage,
+    setEscalationStage,
+  ] = useState("");
+
+  const [
+    priorComplaintReference,
+    setPriorComplaintReference,
   ] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -305,6 +402,17 @@ export default function App() {
 
           disputeLocation:
             disputeLocation.trim(),
+
+          issueLocation:
+            disputeLocation.trim(),
+
+          institutionName:
+            institutionName.trim(),
+
+          escalationStage,
+
+          priorComplaintReference:
+            priorComplaintReference.trim(),
 
           petitioner: {
             fullName: fullName.trim(),
@@ -947,6 +1055,146 @@ export default function App() {
               proper institution and
               delivery method.
             </div>
+
+            <label
+              style={{
+                fontWeight: "600",
+                color: "#222",
+                fontSize: "15px",
+              }}
+            >
+              Organisation, company or agency complained against
+            </label>
+
+            <input
+              value={
+                institutionName
+              }
+              onChange={(event) =>
+                setInstitutionName(
+                  event.target.value
+                )
+              }
+              style={inputStyle}
+              placeholder="For example: AEDC, MTN, GTBank, Air Peace or a government agency"
+            />
+
+            <div
+              style={{
+                marginTop: "-14px",
+                color: "#555",
+                fontSize: "13px",
+                lineHeight: 1.45,
+              }}
+            >
+              Enter the exact name where
+              possible. PetitionDesk will
+              use it to identify the
+              provider, regulator or
+              responsible institution.
+            </div>
+
+            <label
+              style={{
+                fontWeight: "600",
+                color: "#222",
+                fontSize: "15px",
+              }}
+            >
+              Have you complained to this organisation before?
+            </label>
+
+            <select
+              value={
+                escalationStage
+              }
+              onChange={(event) => {
+                const value =
+                  event.target.value;
+
+                setEscalationStage(
+                  value
+                );
+
+                if (
+                  value !==
+                  "unresolved"
+                ) {
+                  setPriorComplaintReference(
+                    ""
+                  );
+                }
+              }}
+              style={inputStyle}
+            >
+              <option value="">
+                Select where you are in the complaint process
+              </option>
+
+              <option value="initial">
+                No — this is my first formal complaint
+              </option>
+
+              <option value="unresolved">
+                Yes — I complained, but it remains unresolved
+              </option>
+            </select>
+
+            <div
+              style={{
+                marginTop: "-14px",
+                color: "#555",
+                fontSize: "13px",
+                lineHeight: 1.45,
+              }}
+            >
+              This prevents PetitionDesk
+              from sending a first complaint
+              directly to a regulator when
+              the provider should be contacted
+              first.
+            </div>
+
+            {escalationStage ===
+              "unresolved" && (
+              <>
+                <label
+                  style={{
+                    fontWeight: "600",
+                    color: "#222",
+                    fontSize: "15px",
+                  }}
+                >
+                  Previous complaint reference
+                </label>
+
+                <input
+                  value={
+                    priorComplaintReference
+                  }
+                  onChange={(event) =>
+                    setPriorComplaintReference(
+                      event.target.value
+                    )
+                  }
+                  style={inputStyle}
+                  placeholder="Ticket, reference or tracking number, where available"
+                />
+
+                <div
+                  style={{
+                    marginTop: "-14px",
+                    color: "#555",
+                    fontSize: "13px",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  This is optional, but it
+                  strengthens a regulatory
+                  escalation.
+                </div>
+              </>
+            )}
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Email</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
