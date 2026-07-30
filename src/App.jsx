@@ -1,6 +1,9 @@
 // src/App.jsx
 import { useEffect, useRef, useState } from "react";
 
+import FreeAccessPanel from "./components/FreeAccessPanel.jsx";
+import useFirebaseIdentity from "./hooks/useFirebaseIdentity.js";
+
 function humanizeCode(
   value
 ) {
@@ -415,6 +418,27 @@ export default function App() {
     setEmailRoutingAvailable,
   ] = useState(false);
 
+  const [
+    unlockMode,
+    setUnlockMode,
+  ] = useState("paid");
+
+  const [
+    accessStatus,
+    setAccessStatus,
+  ] = useState({
+    enabled: false,
+    freeLimit: 2,
+    freeUsed: 0,
+    freeRemaining: 0,
+    requiresPayment: true,
+  });
+
+  const [
+    accessLoading,
+    setAccessLoading,
+  ] = useState(true);
+
   // ✅ Admin mode (30 mins)
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [adminKeyInput, setAdminKeyInput] = useState("");
@@ -426,6 +450,34 @@ export default function App() {
   )
     .trim()
     .replace(/\/+$/, "");
+
+  const {
+    user:
+      verifiedUser,
+
+    loading:
+      identityLoading,
+
+    busy:
+      identityBusy,
+
+    message:
+      identityMessage,
+
+    error:
+      identityError,
+
+    needsEmailConfirmation,
+
+    sendLink:
+      sendIdentityLink,
+
+    completeLink:
+      completeIdentityLink,
+
+    signOutUser:
+      signOutIdentity,
+  } = useFirebaseIdentity();
 
   // ---- hidden admin trigger (tap PD logo 5 times)
   const tapCountRef = useRef(0);
@@ -498,17 +550,159 @@ export default function App() {
     setAdminActive(false);
   }
 
+  async function buildIdentityHeaders() {
+    const headers = {
+      "Content-Type":
+        "application/json",
+    };
+
+    if (verifiedUser) {
+      const token =
+        await verifiedUser.getIdToken();
+
+      headers.Authorization =
+        `Bearer ${token}`;
+    }
+
+    return headers;
+  }
+
+  async function refreshAccessStatus() {
+    setAccessLoading(
+      true
+    );
+
+    try {
+      const headers = {};
+
+      if (verifiedUser) {
+        const token =
+          await verifiedUser.getIdToken();
+
+        headers.Authorization =
+          `Bearer ${token}`;
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE}/access/status`,
+          {
+            headers,
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
+
+      if (!response.ok) {
+        if (
+          data
+            ?.requiresVerification
+        ) {
+          setAccessStatus({
+            enabled: true,
+            freeLimit: 2,
+            freeUsed: 0,
+            freeRemaining: 2,
+            requiresPayment: false,
+          });
+
+          return;
+        }
+
+        throw new Error(
+          data.error ||
+          "Could not read free-petition access."
+        );
+      }
+
+      setAccessStatus({
+        enabled:
+          data.enabled ===
+          true,
+
+        freeLimit:
+          Number(
+            data.freeLimit ??
+            2
+          ),
+
+        freeUsed:
+          Number(
+            data.freeUsed ??
+            0
+          ),
+
+        freeRemaining:
+          Number(
+            data.freeRemaining ??
+            0
+          ),
+
+        requiresPayment:
+          data.requiresPayment ===
+          true,
+      });
+    } catch (
+      accessError
+    ) {
+      console.error(
+        accessError
+      );
+    } finally {
+      setAccessLoading(
+        false
+      );
+    }
+  }
+
+  useEffect(
+    () => {
+      refreshAccessStatus();
+
+      if (
+        verifiedUser?.email
+      ) {
+        setEmail(
+          verifiedUser.email
+        );
+      }
+
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [
+      verifiedUser,
+    ]
+  );
+
   // ===========
   // Generate
   // ===========
   async function handleGenerate(e) {
     e.preventDefault();
     setError("");
+
+    if (
+      accessStatus.enabled &&
+      !verifiedUser
+    ) {
+      setError(
+        "Verify your email before generating a petition."
+      );
+
+      return;
+    }
+
     setLoading(true);
 
     setPreview("");
     setTxRef("");
     setNeedsPayment(false);
+    setUnlockMode("paid");
 
     setUnlocked(false);
     setPetitionText("");
@@ -523,7 +717,8 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers:
+          await buildIdentityHeaders(),
         body: JSON.stringify({
           complaint:
             description.trim(),
@@ -596,6 +791,22 @@ export default function App() {
         data.needsPayment !== false
       );
 
+      setUnlockMode(
+        data.unlockMode ||
+        (
+          data.needsPayment ===
+          false
+            ? "free"
+            : "paid"
+        )
+      );
+
+      if (data.access) {
+        setAccessStatus(
+          data.access
+        );
+      }
+
       setSector(
         data.sector || ""
       );
@@ -660,6 +871,218 @@ export default function App() {
     }
   }
 
+  function applyUnlockedPayload(
+    data
+  ) {
+    setUnlocked(
+      true
+    );
+
+    setPetitionText(
+      data.petition ||
+      ""
+    );
+
+    setSector(
+      data.sector ||
+      ""
+    );
+
+    setMentionedInstitutions([
+      ...(
+        data.mentionedInstitutions ||
+        []
+      ),
+      ...(
+        data.toInstitutions ||
+        []
+      ),
+      ...(
+        data.ccInstitutions ||
+        []
+      ),
+    ].filter(
+      (
+        value,
+        index,
+        values
+      ) =>
+        value &&
+        values.indexOf(
+          value
+        ) === index
+    ));
+
+    setToEmails(
+      data.to ||
+      []
+    );
+
+    setCcEmails(
+      data.cc ||
+      []
+    );
+
+    setMailto(
+      data.mailto ||
+      ""
+    );
+
+    setRoutingDecision(
+      data.routingDecision ||
+      null
+    );
+
+    setEmailRoutingAvailable(
+      data.emailRoutingAvailable ===
+      true
+    );
+
+    setNeedsPayment(
+      false
+    );
+
+    if (data.access) {
+      setAccessStatus(
+        data.access
+      );
+    }
+
+    if (!data.admin) {
+      localStorage.removeItem(
+        "pd_pending_tx_ref"
+      );
+
+      localStorage.removeItem(
+        "pd_last_tx_ref"
+      );
+    }
+
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+
+    setError("");
+  }
+
+  async function handleFreeUnlock() {
+    if (!txRef) {
+      return;
+    }
+
+    if (adminActive) {
+      await unlockByTxRef(
+        txRef
+      );
+
+      return;
+    }
+
+    if (!verifiedUser) {
+      setError(
+        "Verify your email before using a free petition."
+      );
+
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response =
+        await fetch(
+          `${API_BASE}/free-unlock`,
+          {
+            method:
+              "POST",
+
+            headers:
+              await buildIdentityHeaders(),
+
+            body:
+              JSON.stringify({
+                tx_ref:
+                  txRef,
+              }),
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
+
+      if (
+        response.status ===
+        402
+      ) {
+        if (data.access) {
+          setAccessStatus(
+            data.access
+          );
+        }
+
+        setUnlockMode(
+          "paid"
+        );
+
+        setNeedsPayment(
+          true
+        );
+
+        setError(
+          data.error ||
+          "Your two free petitions have been used. Pay to unlock this petition."
+        );
+
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+          `Free unlock error ${response.status}`
+        );
+      }
+
+      if (
+        data.ok &&
+        data.unlocked
+      ) {
+        applyUnlockedPayload(
+          data
+        );
+
+        return;
+      }
+
+      throw new Error(
+        data.error ||
+        "Could not unlock the free petition."
+      );
+    } catch (
+      freeUnlockError
+    ) {
+      console.error(
+        freeUnlockError
+      );
+
+      setError(
+        freeUnlockError?.message ||
+        "Free petition unlock failed."
+      );
+    } finally {
+      setLoading(
+        false
+      );
+    }
+  }
+
   // ===========
   // Unlock
   // ===========
@@ -709,72 +1132,14 @@ export default function App() {
       }
 
       if (data.ok && data.unlocked) {
-        setUnlocked(true);
-        setPetitionText(data.petition || "");
-
-        // ✅ restored details
-        setSector(
-          data.sector || ""
+        applyUnlockedPayload(
+          data
         );
-
-        setMentionedInstitutions([
-          ...(
-            data.mentionedInstitutions ||
-            []
-          ),
-          ...(
-            data.toInstitutions ||
-            []
-          ),
-          ...(
-            data.ccInstitutions ||
-            []
-          ),
-        ].filter(
-          (
-            value,
-            index,
-            values
-          ) =>
-            value &&
-            values.indexOf(
-              value
-            ) === index
-        ));
-
-        setToEmails(
-          data.to || []
-        );
-
-        setCcEmails(
-          data.cc || []
-        );
-
-        setMailto(
-          data.mailto || ""
-        );
-
-        setRoutingDecision(
-          data.routingDecision ||
-            null
-        );
-
-        setEmailRoutingAvailable(
-          data.emailRoutingAvailable ===
-            true
-        );
-
-        // only clear tx refs when paid unlock (admin should not wipe)
-        if (!data.admin) {
-          localStorage.removeItem("pd_pending_tx_ref");
-          localStorage.removeItem("pd_last_tx_ref");
-        }
-
-        // clean URL
-        window.history.replaceState({}, document.title, "/");
-        setError("");
       } else {
-        throw new Error(data.error || "Could not unlock petition");
+        throw new Error(
+          data.error ||
+          "Could not unlock petition"
+        );
       }
     } catch (err) {
       console.error(err);
@@ -836,6 +1201,10 @@ export default function App() {
   function relockNow() {
     setUnlocked(false);
     setPetitionText("");
+    setPreview("");
+    setTxRef("");
+    setNeedsPayment(false);
+    setUnlockMode("paid");
     setSector("");
     setMentionedInstitutions([]);
     setToEmails([]);
@@ -1139,6 +1508,55 @@ export default function App() {
         </div>
       )}
 
+      <FreeAccessPanel
+        enabled={
+          accessStatus.enabled
+        }
+        accessLoading={
+          accessLoading
+        }
+        accessStatus={
+          accessStatus
+        }
+        user={
+          verifiedUser
+        }
+        identityLoading={
+          identityLoading
+        }
+        identityBusy={
+          identityBusy
+        }
+        identityMessage={
+          identityMessage
+        }
+        identityError={
+          identityError
+        }
+        needsEmailConfirmation={
+          needsEmailConfirmation
+        }
+        email={
+          email
+        }
+        setEmail={
+          setEmail
+        }
+        onSendLink={
+          sendIdentityLink
+        }
+        onCompleteLink={
+          completeIdentityLink
+        }
+        onSignOut={
+          async () => {
+            await signOutIdentity();
+            setEmail("");
+            relockNow();
+          }
+        }
+      />
+
       {!unlocked ? (
         <>
           <form
@@ -1355,7 +1773,51 @@ export default function App() {
             )}
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Email</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+
+            <input
+              type="email"
+              value={
+                email
+              }
+              onChange={(event) =>
+                setEmail(
+                  event.target.value
+                )
+              }
+              disabled={
+                accessStatus.enabled &&
+                Boolean(
+                  verifiedUser
+                )
+              }
+              style={{
+                ...inputStyle,
+
+                backgroundColor:
+                  accessStatus.enabled &&
+                  verifiedUser
+                    ? "#edf5ef"
+                    : "#ffffff",
+              }}
+            />
+
+            {accessStatus.enabled &&
+              verifiedUser && (
+              <div
+                style={{
+                  marginTop:
+                    "-14px",
+                  color:
+                    "#317047",
+                  fontSize:
+                    "13px",
+                  fontWeight:
+                    "700",
+                }}
+              >
+                This verified email is tied to your free-petition allowance.
+              </div>
+            )}
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Phone</label>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
@@ -1368,19 +1830,48 @@ export default function App() {
             />
 
             <button
-              disabled={loading || !description.trim()}
+              disabled={
+                loading ||
+                accessLoading ||
+                !description.trim() ||
+                (
+                  accessStatus.enabled &&
+                  !verifiedUser
+                )
+              }
               style={{
                 padding: "16px",
-                backgroundColor: loading ? "#aaa" : "#006600",
+                backgroundColor:
+                  loading ||
+                  accessLoading ||
+                  (
+                    accessStatus.enabled &&
+                    !verifiedUser
+                  )
+                    ? "#aaa"
+                    : "#006600",
                 color: "#fff",
                 fontWeight: "bold",
                 fontSize: "17px",
                 border: "none",
                 borderRadius: "10px",
-                cursor: loading ? "not-allowed" : "pointer",
+                cursor:
+                  loading ||
+                  accessLoading ||
+                  (
+                    accessStatus.enabled &&
+                    !verifiedUser
+                  )
+                    ? "not-allowed"
+                    : "pointer",
               }}
             >
-              {loading ? "Generating..." : "Generate Petition"}
+              {loading
+                ? "Generating..."
+                : accessStatus.enabled &&
+                  accessStatus.freeRemaining > 0
+                ? "Generate My Free Petition"
+                : "Generate Petition Preview"}
             </button>
           </form>
 
@@ -1403,7 +1894,7 @@ export default function App() {
             </div>
           )}
 
-          {needsPayment && (
+          {preview && (
             <div style={{ marginTop: "40px" }}>
               <RoutingDecisionCard
                 decision={
@@ -1456,27 +1947,46 @@ export default function App() {
               </div>
 
               <button
-                onClick={handlePay}
-                disabled={loading}
+                onClick={
+                  unlockMode ===
+                  "free"
+                    ? handleFreeUnlock
+                    : handlePay
+                }
+                disabled={
+                  loading
+                }
                 style={{
                   marginTop: "30px",
                   width: "100%",
                   padding: "16px",
-                  backgroundColor: loading ? "#ccc" : "#006600",
+                  backgroundColor:
+                    loading
+                      ? "#ccc"
+                      : "#006600",
                   color: "#fff",
                   fontSize: "18px",
                   fontWeight: "bold",
                   border: "none",
                   borderRadius: "12px",
-                  cursor: loading ? "not-allowed" : "pointer",
+                  cursor:
+                    loading
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 {loading
                   ? "Processing..."
+                  : unlockMode ===
+                    "free"
+                  ? routingDecision?.routeKey ===
+                    "formal_notice"
+                    ? "Unlock Full Notice — Free"
+                    : "Unlock Full Petition — Free"
                   : routingDecision?.routeKey ===
                     "formal_notice"
                   ? "Pay ₦1,050 to Unlock Full Notice"
-                  : "Pay ₦1,050 to Unlock Full Document"}
+                  : "Pay ₦1,050 to Unlock Full Petition"}
               </button>
             </div>
           )}
