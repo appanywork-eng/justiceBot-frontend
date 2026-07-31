@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:payment-identity": "node scripts/test-payment-identity.mjs"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

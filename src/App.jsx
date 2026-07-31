@@ -490,6 +490,14 @@ export default function App() {
   const tapCountRef = useRef(0);
   const tapTimerRef = useRef(null);
 
+  /*
+   * Prevent the same payment return
+   * from being processed repeatedly
+   * during React state changes.
+   */
+  const paymentResumeRef =
+    useRef("");
+
   function handleLogoTap() {
     tapCountRef.current += 1;
     if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
@@ -843,37 +851,131 @@ export default function App() {
   // Pay
   // ===========
   async function handlePay() {
-    if (!txRef) return;
+    if (!txRef) {
+      return;
+    }
+
+    if (identityLoading) {
+      setError(
+        "Please wait while your verified account is restored."
+      );
+
+      return;
+    }
+
+    if (
+      accessStatus.enabled &&
+      !verifiedUser
+    ) {
+      setError(
+        "Verify your email before starting payment for this petition."
+      );
+
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
-      localStorage.setItem("pd_pending_tx_ref", txRef);
+      /*
+       * Adds the Firebase bearer token
+       * whenever a verified user exists.
+       * This allows the backend to confirm
+       * that the payment belongs to the
+       * account that generated the petition.
+       */
+      const headers =
+        await buildIdentityHeaders();
 
-      const res = await fetch(`${API_BASE}/pay/initialize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tx_ref: txRef,
-          amount: 1050,
-          currency: "NGN",
-          email: email.trim() || "user@petitiondesk.com",
-          name: fullName.trim() || "PetitionDesk User",
-          phone: phone.trim() || "",
-        }),
-      });
+      localStorage.setItem(
+        "pd_pending_tx_ref",
+        txRef
+      );
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Payment init error ${res.status}`);
+      const res =
+        await fetch(
+          `${API_BASE}/pay/initialize`,
+          {
+            method:
+              "POST",
 
-      if (data.ok && data.link) {
-        window.location.href = data.link;
-      } else {
-        throw new Error(data.error || "Could not start payment");
+            headers,
+
+            body:
+              JSON.stringify({
+                tx_ref:
+                  txRef,
+
+                amount:
+                  1050,
+
+                currency:
+                  "NGN",
+
+                email:
+                  email.trim() ||
+                  "user@petitiondesk.com",
+
+                name:
+                  fullName.trim() ||
+                  "PetitionDesk User",
+
+                phone:
+                  phone.trim() ||
+                  "",
+              }),
+          }
+        );
+
+      const data =
+        await res
+          .json()
+          .catch(
+            () => ({})
+          );
+
+      if (!res.ok) {
+        const paymentError =
+          new Error(
+            data.error ||
+            `Payment init error ${res.status}`
+          );
+
+        paymentError.status =
+          res.status;
+
+        throw paymentError;
       }
-    } catch (err) {
-      console.error(err);
-      setError(err?.message || "Payment failed. Try again.");
+
+      if (
+        data.ok &&
+        data.link
+      ) {
+        window.location.href =
+          data.link;
+
+        return;
+      }
+
+      throw new Error(
+        data.error ||
+        "Could not start payment"
+      );
+    } catch (paymentError) {
+      console.error(
+        paymentError
+      );
+
+      localStorage.removeItem(
+        "pd_pending_tx_ref"
+      );
+
+      setError(
+        paymentError?.message ||
+        "Payment failed. Try again."
+      );
+    } finally {
       setLoading(false);
     }
   }
@@ -1093,35 +1195,95 @@ export default function App() {
   // ===========
   // Unlock
   // ===========
-  async function unlockByTxRef(ref, attempt = 1) {
-    if (!ref) return;
+  async function unlockByTxRef(
+    ref,
+    attempt = 1,
+    transactionId = ""
+  ) {
+    if (!ref) {
+      return;
+    }
 
     setLoading(true);
 
     try {
-      const adminToken = getAdminToken();
+      const adminToken =
+        getAdminToken();
 
-      const res = await fetch(`${API_BASE}/unlock-petition`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(adminToken ? { "x-admin-token": adminToken } : {}),
-        },
-        body: JSON.stringify({ tx_ref: ref }),
-      });
+      /*
+       * Normal users send their Firebase
+       * ID token. Administrators retain the
+       * separate temporary admin token.
+       */
+      const identityHeaders =
+        await buildIdentityHeaders();
 
-      const data = await res.json().catch(() => ({}));
+      const res =
+        await fetch(
+          `${API_BASE}/unlock-petition`,
+          {
+            method:
+              "POST",
 
-      // Pending = retry (but keep it gentle)
-      if (res.status === 202 || data?.pending) {
+            headers: {
+              ...identityHeaders,
+
+              ...(adminToken
+                ? {
+                    "x-admin-token":
+                      adminToken,
+                  }
+                : {}),
+            },
+
+            body:
+              JSON.stringify({
+                tx_ref:
+                  ref,
+
+                ...(transactionId
+                  ? {
+                      transaction_id:
+                        transactionId,
+                    }
+                  : {}),
+              }),
+          }
+        );
+
+      const data =
+        await res
+          .json()
+          .catch(
+            () => ({})
+          );
+
+      if (
+        res.status === 202 ||
+        data?.pending
+      ) {
         setLoading(false);
-        setError("Payment processing… please wait a moment.");
+
+        setError(
+          "Payment processing… please wait a moment."
+        );
 
         if (attempt < 12) {
-          setTimeout(() => unlockByTxRef(ref, attempt + 1), 2500);
+          setTimeout(
+            () =>
+              unlockByTxRef(
+                ref,
+                attempt + 1,
+                transactionId
+              ),
+            2500
+          );
         } else {
-          setError("Still processing. Please refresh in 1 minute.");
+          setError(
+            "Still processing. Please refresh in 1 minute."
+          );
         }
+
         return;
       }
 
@@ -1129,7 +1291,7 @@ export default function App() {
         const unlockError =
           new Error(
             data.error ||
-              `Unlock error ${res.status}`
+            `Unlock error ${res.status}`
           );
 
         unlockError.status =
@@ -1138,24 +1300,33 @@ export default function App() {
         throw unlockError;
       }
 
-      if (data.ok && data.unlocked) {
+      if (
+        data.ok &&
+        data.unlocked
+      ) {
         applyUnlockedPayload(
           data
         );
-      } else {
-        throw new Error(
-          data.error ||
-          "Could not unlock petition"
-        );
+
+        return;
       }
-    } catch (err) {
-      console.error(err);
+
+      throw new Error(
+        data.error ||
+        "Could not unlock petition"
+      );
+    } catch (unlockError) {
+      console.error(
+        unlockError
+      );
 
       const expired =
-        err?.status === 404 ||
+        unlockError?.status ===
+          404 ||
         /petition expired/i.test(
           String(
-            err?.message || ""
+            unlockError?.message ||
+            ""
           )
         );
 
@@ -1179,8 +1350,8 @@ export default function App() {
         );
       } else {
         setError(
-          err?.message ||
-            "Verification failed. If charged, contact support."
+          unlockError?.message ||
+          "Verification failed. If charged, contact support."
         );
       }
     } finally {
@@ -1222,38 +1393,103 @@ export default function App() {
   }
 
   // ===========
-  // On load: track visit + unlock if redirected back with tx_ref
+  // Initial page activity
   // ===========
-  useEffect(() => {
-    // track visit (counter)
-    fetch(`${API_BASE}/track/visit`, { method: "POST" }).catch(() => {});
-
-    syncAdminActive();
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const returnedTxRef = urlParams.get("tx_ref");
-
-    const pending =
-      localStorage.getItem(
-        "pd_pending_tx_ref"
+  useEffect(
+    () => {
+      fetch(
+        `${API_BASE}/track/visit`,
+        {
+          method:
+            "POST",
+        }
+      ).catch(
+        () => {}
       );
 
-    /*
-     * Only retry an actual payment
-     * return or pending payment.
-     * A previously generated reference
-     * must not trigger an automatic
-     * unlock on every homepage visit.
-     */
-    const refToUse =
-      returnedTxRef ||
-      pending;
+      syncAdminActive();
 
-    if (refToUse) {
-      unlockByTxRef(refToUse);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    []
+  );
+
+  // ===========
+  // Resume payment only after Firebase
+  // has restored the initial auth state.
+  // ===========
+  useEffect(
+    () => {
+      if (identityLoading) {
+        return;
+      }
+
+      const urlParams =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      const returnedTxRef =
+        urlParams.get(
+          "tx_ref"
+        );
+
+      const returnedTransactionId =
+        urlParams.get(
+          "transaction_id"
+        ) ||
+        "";
+
+      const pending =
+        localStorage.getItem(
+          "pd_pending_tx_ref"
+        );
+
+      const refToUse =
+        returnedTxRef ||
+        pending;
+
+      if (!refToUse) {
+        paymentResumeRef.current =
+          "";
+
+        return;
+      }
+
+      const resumeKey = [
+        refToUse,
+
+        returnedTransactionId,
+
+        verifiedUser?.uid ||
+          "anonymous",
+      ].join(
+        ":"
+      );
+
+      if (
+        paymentResumeRef.current ===
+        resumeKey
+      ) {
+        return;
+      }
+
+      paymentResumeRef.current =
+        resumeKey;
+
+      unlockByTxRef(
+        refToUse,
+        1,
+        returnedTransactionId
+      );
+
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [
+      identityLoading,
+      verifiedUser,
+    ]
+  );
 
   return (
     <div className="pd-app-shell">

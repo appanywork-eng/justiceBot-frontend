@@ -146,6 +146,41 @@ export default function useFirebaseIdentity() {
             }
           }
 
+          /*
+           * Do not mark identity loading
+           * complete until Firebase has
+           * delivered its first auth state.
+           * This prevents payment recovery
+           * from running before the signed-in
+           * user has been restored.
+           */
+          let initialAuthStateSettled =
+            false;
+
+          let resolveInitialAuthState =
+            () => {};
+
+          const initialAuthState =
+            new Promise(
+              (
+                resolve
+              ) => {
+                resolveInitialAuthState =
+                  () => {
+                    if (
+                      initialAuthStateSettled
+                    ) {
+                      return;
+                    }
+
+                    initialAuthStateSettled =
+                      true;
+
+                    resolve();
+                  };
+              }
+            );
+
           unsubscribe =
             await observeFirebaseUser(
               (
@@ -156,11 +191,17 @@ export default function useFirebaseIdentity() {
                     nextUser
                   );
                 }
+
+                resolveInitialAuthState();
               }
             );
 
           if (disposed) {
             unsubscribe();
+
+            resolveInitialAuthState();
+          } else {
+            await initialAuthState;
           }
         } catch (
           initialisationError
