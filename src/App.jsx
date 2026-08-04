@@ -893,6 +893,28 @@ export default function App() {
       return;
     }
 
+    if (
+      bankingMatter &&
+      unresolvedComplaint &&
+      !priorComplaintDate
+    ) {
+      const complainedInstitution =
+        institutionName.trim() ||
+        "the financial institution";
+
+      setError(
+        `Enter the date you first complained to ${complainedInstitution} so PetitionDesk can determine whether CBN escalation is due.`
+      );
+
+      document
+        .getElementById(
+          "prior-complaint-date"
+        )
+        ?.focus();
+
+      return;
+    }
+
     setLoading(true);
 
     setPreview("");
@@ -2085,6 +2107,7 @@ export default function App() {
                 </label>
 
                 <input
+                  id="prior-complaint-date"
                   type="date"
                   value={
                     priorComplaintDate
@@ -2092,13 +2115,32 @@ export default function App() {
                   max={
                     maximumComplaintDate
                   }
+                  required={
+                    bankingMatter &&
+                    unresolvedComplaint
+                  }
+                  onInvalid={(
+                    event
+                  ) => {
+                    const complainedInstitution =
+                      institutionName.trim() ||
+                      "the financial institution";
+
+                    event.currentTarget.setCustomValidity(
+                      `Enter the date you first complained to ${complainedInstitution} so PetitionDesk can determine whether CBN escalation is due.`
+                    );
+                  }}
                   onChange={(
                     event
-                  ) =>
+                  ) => {
+                    event.currentTarget.setCustomValidity(
+                      ""
+                    );
+
                     setPriorComplaintDate(
                       event.target.value
-                    )
-                  }
+                    );
+                  }}
                   style={
                     inputStyle
                   }

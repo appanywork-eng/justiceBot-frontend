@@ -100,6 +100,30 @@ console.log(
   "✅ BANKING TIMING IS EXPLAINED TO THE USER"
 );
 
+assert.match(
+  source,
+  /bankingMatter\s*&&\s*unresolvedComplaint\s*&&\s*!priorComplaintDate/
+);
+
+assert.match(
+  source,
+  /Enter the date you first complained to/
+);
+
+assert.match(
+  source,
+  /id="prior-complaint-date"/
+);
+
+assert.match(
+  source,
+  /required=\{\s*bankingMatter\s*&&\s*unresolvedComplaint\s*\}/
+);
+
+console.log(
+  "✅ UNRESOLVED BANKING COMPLAINT DATE IS REQUIRED"
+);
+
 console.log(
   "✅ FRONTEND BANKING ROUTING CONTRACT PASSED"
 );
