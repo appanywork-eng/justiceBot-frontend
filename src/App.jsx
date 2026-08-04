@@ -128,6 +128,71 @@ function jurisdictionLabel(
   );
 }
 
+function likelyBankingMatter({
+  institutionName = "",
+  complaint = "",
+} = {}) {
+  const text =
+    `${institutionName} ${complaint}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const bankingSignals = [
+    "bank",
+    "banking",
+    "microfinance",
+    "financial institution",
+    "account restriction",
+    "account suspension",
+    "account freeze",
+    "withdrawal",
+    "debit transaction",
+    "bank transfer",
+    "failed transfer",
+    "loan",
+    "credit facility",
+    "overdraft",
+    "mortgage",
+    "unauthorised charge",
+    "unauthorized charge",
+    "excess charge",
+    "wallet",
+    "fintech",
+    "gtbank",
+    "guaranty trust",
+    "access bank",
+    "first bank",
+    "firstbank",
+    "uba",
+    "zenith",
+    "stanbic",
+    "tajbank",
+    "jaiz",
+    "wema",
+    "fidelity bank",
+    "ecobank",
+    "union bank",
+    "polaris bank",
+    "sterling bank",
+    "fcmb",
+    "kuda",
+    "opay",
+    "palmpay",
+    "moniepoint",
+    "flutterwave",
+    "paystack",
+    "quickteller",
+    "paga",
+  ];
+
+  return bankingSignals.some(
+    signal =>
+      text.includes(signal)
+  );
+}
+
 function RoutingDecisionCard({
   decision,
   emailRoutingAvailable,
@@ -156,6 +221,13 @@ function RoutingDecisionCard({
       decision.deliveryMethod ||
         ""
     );
+
+  const bankingTiming =
+    decision.bankingTiming &&
+    typeof decision.bankingTiming ===
+      "object"
+      ? decision.bankingTiming
+      : null;
 
   const usesOfficialPortal =
     Boolean(
@@ -291,6 +363,75 @@ function RoutingDecisionCard({
         )}
       </div>
 
+      {bankingTiming && (
+        <div
+          style={{
+            marginTop: "14px",
+            padding: "13px",
+            borderRadius: "10px",
+            border:
+              "1px solid #b8d8bd",
+            background:
+              "#ffffff",
+          }}
+        >
+          <div>
+            <strong>
+              Banking complaint type:
+            </strong>{" "}
+            {humanizeCode(
+              bankingTiming.complaintType
+            )}
+          </div>
+
+          <div>
+            <strong>
+              Applicable resolution period:
+            </strong>{" "}
+            {
+              bankingTiming.waitingPeriodDays
+            }{" "}
+            days
+          </div>
+
+          {Number.isFinite(
+            bankingTiming.daysElapsed
+          ) && (
+            <div>
+              <strong>
+                Days elapsed:
+              </strong>{" "}
+              {
+                bankingTiming.daysElapsed
+              }
+            </div>
+          )}
+
+          {Number.isFinite(
+            bankingTiming.daysRemaining
+          ) && (
+            <div>
+              <strong>
+                Days remaining:
+              </strong>{" "}
+              {
+                bankingTiming.daysRemaining
+              }
+            </div>
+          )}
+
+          <div>
+            <strong>
+              CBN escalation:
+            </strong>{" "}
+            {bankingTiming
+              .escalationEligible
+              ? "Eligible"
+              : "Not yet eligible"}
+          </div>
+        </div>
+      )}
+
       <div>
         <strong>
           Delivery:
@@ -398,6 +539,21 @@ export default function App() {
     setPriorComplaintReference,
   ] = useState("");
 
+  const [
+    priorComplaintDate,
+    setPriorComplaintDate,
+  ] = useState("");
+
+  const [
+    bankingComplaintType,
+    setBankingComplaintType,
+  ] = useState("");
+
+  const [
+    providerResponseStatus,
+    setProviderResponseStatus,
+  ] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -450,6 +606,31 @@ export default function App() {
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [adminKeyInput, setAdminKeyInput] = useState("");
   const [adminActive, setAdminActive] = useState(false);
+
+  const bankingMatter =
+    likelyBankingMatter({
+      institutionName,
+      complaint:
+        description,
+    });
+
+  const unresolvedComplaint =
+    escalationStage ===
+      "unresolved";
+
+  const maximumComplaintDate =
+    new Date(
+      Date.now() -
+      new Date()
+        .getTimezoneOffset() *
+        60 *
+        1000
+    )
+      .toISOString()
+      .slice(
+        0,
+        10
+      );
 
   // PetitionDesk API endpoint
   const API_BASE = String(
@@ -750,7 +931,24 @@ export default function App() {
           escalationStage,
 
           priorComplaintReference:
-            priorComplaintReference.trim(),
+            unresolvedComplaint
+              ? priorComplaintReference.trim()
+              : "",
+
+          priorComplaintDate:
+            unresolvedComplaint
+              ? priorComplaintDate
+              : "",
+
+          bankingComplaintType:
+            bankingMatter
+              ? bankingComplaintType
+              : "",
+
+          providerResponseStatus:
+            unresolvedComplaint
+              ? providerResponseStatus
+              : "",
 
           petitioner: {
             fullName: fullName.trim(),
@@ -1796,6 +1994,18 @@ export default function App() {
                   setPriorComplaintReference(
                     ""
                   );
+
+                  setPriorComplaintDate(
+                    ""
+                  );
+
+                  setBankingComplaintType(
+                    ""
+                  );
+
+                  setProviderResponseStatus(
+                    ""
+                  );
                 }
               }}
               style={inputStyle}
@@ -1858,10 +2068,196 @@ export default function App() {
                     lineHeight: 1.45,
                   }}
                 >
-                  This is optional, but it
-                  strengthens a regulatory
-                  escalation.
+                  Required for a regulator-ready escalation. If no reference was issued, PetitionDesk will keep the complaint at the institution follow-up stage.
                 </div>
+
+                <label
+                  style={{
+                    fontWeight:
+                      "600",
+                    color:
+                      "#222",
+                    fontSize:
+                      "15px",
+                  }}
+                >
+                  Date the previous complaint was submitted
+                </label>
+
+                <input
+                  type="date"
+                  value={
+                    priorComplaintDate
+                  }
+                  max={
+                    maximumComplaintDate
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setPriorComplaintDate(
+                      event.target.value
+                    )
+                  }
+                  style={
+                    inputStyle
+                  }
+                />
+
+                <div
+                  style={{
+                    marginTop:
+                      "-14px",
+                    color:
+                      "#555",
+                    fontSize:
+                      "13px",
+                    lineHeight:
+                      1.45,
+                  }}
+                >
+                  PetitionDesk uses this date to determine whether the applicable complaint-resolution period has expired.
+                </div>
+
+                <label
+                  style={{
+                    fontWeight:
+                      "600",
+                    color:
+                      "#222",
+                    fontSize:
+                      "15px",
+                  }}
+                >
+                  What happened after your earlier complaint?
+                </label>
+
+                <select
+                  value={
+                    providerResponseStatus
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setProviderResponseStatus(
+                      event.target.value
+                    )
+                  }
+                  style={
+                    inputStyle
+                  }
+                >
+                  <option value="">
+                    Select the organisation's response
+                  </option>
+
+                  <option value="no_response">
+                    No response
+                  </option>
+
+                  <option value="acknowledged_no_resolution">
+                    Acknowledged, but not resolved
+                  </option>
+
+                  <option value="pending">
+                    Still being reviewed
+                  </option>
+
+                  <option value="rejected">
+                    Complaint was rejected
+                  </option>
+
+                  <option value="partially_resolved">
+                    Partly resolved
+                  </option>
+                </select>
+
+                {bankingMatter && (
+                  <>
+                    <div
+                      style={{
+                        padding:
+                          "14px",
+                        borderRadius:
+                          "10px",
+                        border:
+                          "1px solid #b8d8bd",
+                        background:
+                          "#f1fff3",
+                        color:
+                          "#143b1c",
+                        fontSize:
+                          "14px",
+                        lineHeight:
+                          1.5,
+                        fontWeight:
+                          "700",
+                      }}
+                    >
+                      Banking timing safeguards are active. PetitionDesk will apply either the general 14-day period or the extended 30-day period before recommending CBN escalation.
+                    </div>
+
+                    <label
+                      style={{
+                        fontWeight:
+                          "600",
+                        color:
+                          "#222",
+                        fontSize:
+                          "15px",
+                      }}
+                    >
+                      Type of banking complaint
+                    </label>
+
+                    <select
+                      value={
+                        bankingComplaintType
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setBankingComplaintType(
+                          event.target.value
+                        )
+                      }
+                      style={
+                        inputStyle
+                      }
+                    >
+                      <option value="">
+                        Select the closest category
+                      </option>
+
+                      <option value="general_banking">
+                        General banking, transfer, withdrawal or account complaint
+                      </option>
+
+                      <option value="loan_or_credit">
+                        Loan, credit facility, overdraft or mortgage
+                      </option>
+
+                      <option value="excess_charges">
+                        Unauthorised, wrongful or excess charges
+                      </option>
+                    </select>
+
+                    <div
+                      style={{
+                        marginTop:
+                          "-14px",
+                        color:
+                          "#555",
+                        fontSize:
+                          "13px",
+                        lineHeight:
+                          1.45,
+                      }}
+                    >
+                      General banking complaints use the 14-day period. Loan, credit and excess-charge complaints use the extended 30-day period.
+                    </div>
+                  </>
+                )}
               </>
             )}
 
