@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:payment-identity": "node scripts/test-payment-identity.mjs",
-    "test:banking-form": "node scripts/test-banking-form.mjs"
+    "test:banking-form": "node scripts/test-banking-form.mjs",
+    "test:pricing-policy": "node scripts/test-pricing-policy.mjs"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

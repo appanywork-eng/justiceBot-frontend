@@ -118,7 +118,7 @@ export default function FreeAccessPanel({
                 1.6,
             }}
           >
-            Verify your email. A free use is counted only when a complete petition is unlocked.
+            Verify your email. Your first two complete petitions are free. After that, each complete petition costs ₦550.
           </p>
         </div>
 
