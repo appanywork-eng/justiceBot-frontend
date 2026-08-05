@@ -1128,7 +1128,7 @@ export default function App() {
                   txRef,
 
                 amount:
-                  1050,
+                  550,
 
                 currency:
                   "NGN",
@@ -2516,8 +2516,8 @@ export default function App() {
                     : "Unlock Full Petition — Free"
                   : routingDecision?.routeKey ===
                     "formal_notice"
-                  ? "Pay ₦1,050 to Unlock Full Notice"
-                  : "Pay ₦1,050 to Unlock Full Petition"}
+                  ? "Pay ₦550 to Unlock Full Notice"
+                  : "Pay ₦550 to Unlock Full Petition"}
               </button>
             </div>
           )}
