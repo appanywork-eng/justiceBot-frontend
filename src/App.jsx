@@ -1,6 +1,7 @@
 // src/App.jsx
 import { useEffect, useRef, useState } from "react";
 
+import AdminControlCentre from "./components/AdminControlCentre.jsx";
 import FreeAccessPanel from "./components/FreeAccessPanel.jsx";
 import HeroSection from "./components/layout/HeroSection.jsx";
 import HowItWorks from "./components/layout/HowItWorks.jsx";
@@ -1813,6 +1814,14 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {adminActive && (
+        <AdminControlCentre
+          apiBase={API_BASE}
+          adminToken={getAdminToken()}
+          onExit={clearAdmin}
+        />
       )}
 
       <section id="draft-petition">
