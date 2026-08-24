@@ -633,6 +633,7 @@ export default function App() {
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [adminKeyInput, setAdminKeyInput] = useState("");
   const [adminActive, setAdminActive] = useState(false);
+  const [adminDraftOpen, setAdminDraftOpen] = useState(false);
 
   const bankingMatter =
     likelyBankingMatter({
@@ -771,6 +772,41 @@ export default function App() {
     sessionStorage.removeItem("pd_admin_token");
     sessionStorage.removeItem("pd_admin_until");
     setAdminActive(false);
+    setAdminDraftOpen(false);
+    relockNow();
+
+    if (verifiedUser?.email) {
+      setEmail(verifiedUser.email);
+    }
+  }
+
+  function openAdminPetitionStudio() {
+    setAdminDraftOpen(true);
+
+    window.setTimeout(() => {
+      document.getElementById("draft-petition")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
+
+  function draftAnotherAdminPetition() {
+    relockNow();
+    setFullName("");
+    setAddress("");
+    setEmail("");
+    setPhone("");
+    setDescription("");
+    setDisputeLocation("");
+    setInstitutionName("");
+    setEscalationStage("");
+    setPriorComplaintReference("");
+    setPriorComplaintDate("");
+    setBankingComplaintType("");
+    setProviderResponseStatus("");
+    setError("");
+    openAdminPetitionStudio();
   }
 
   async function buildIdentityHeaders() {
@@ -910,6 +946,7 @@ export default function App() {
     setError("");
 
     if (
+      !adminActive &&
       accessStatus.enabled &&
       !verifiedUser
     ) {
@@ -960,10 +997,22 @@ export default function App() {
     setEmailRoutingAvailable(false);
 
     try {
+      const adminToken = adminActive ? getAdminToken() : "";
+
+      if (adminActive && !adminToken) {
+        clearAdmin();
+        setError("Your administrator session has expired. Please sign in again.");
+        return;
+      }
+
+      const generationHeaders = await buildIdentityHeaders();
+
       const res = await fetch(`${API_BASE}/generate-petition`, {
         method: "POST",
-        headers:
-          await buildIdentityHeaders(),
+        headers: {
+          ...generationHeaders,
+          ...(adminToken ? { "x-admin-token": adminToken } : {}),
+        },
         body: JSON.stringify({
           complaint:
             description.trim(),
@@ -1097,6 +1146,10 @@ export default function App() {
       if (data.tx_ref) {
         localStorage.setItem("pd_last_tx_ref", data.tx_ref);
       }
+
+      if (adminActive && data.admin === true && data.tx_ref) {
+        await unlockByTxRef(data.tx_ref);
+      }
     } catch (err) {
       console.error(err);
       setError(err?.message || "Failed to generate petition");
@@ -1110,6 +1163,11 @@ export default function App() {
   // ===========
   async function handlePay() {
     if (!txRef) {
+      return;
+    }
+
+    if (adminActive) {
+      await unlockByTxRef(txRef);
       return;
     }
 
@@ -1889,12 +1947,14 @@ export default function App() {
         <AdminControlCentre
           apiBase={API_BASE}
           adminToken={getAdminToken()}
+          onDraftPetition={openAdminPetitionStudio}
           onExit={clearAdmin}
         />
       )}
 
-      {!adminActive && (
+      {(!adminActive || adminDraftOpen) && (
       <section id="draft-petition">
+      {!adminActive && (
       <FreeAccessPanel
         enabled={
           accessStatus.enabled
@@ -1943,6 +2003,7 @@ export default function App() {
           }
         }
       />
+      )}
 
       {!unlocked ? (
         <>
@@ -1962,15 +2023,21 @@ export default function App() {
           >
             <div className="pd-form-intro">
               <div className="pd-eyebrow">
-                Step 1 · Describe the issue
+                {adminActive
+                  ? "Administrator Petition Studio"
+                  : "Step 1 · Describe the issue"}
               </div>
 
               <h2>
-                Draft your petition
+                {adminActive
+                  ? "Draft an unlimited administrator petition"
+                  : "Draft your petition"}
               </h2>
 
               <p>
-                Share the facts. We will structure the petition and suggest the right route.
+                {adminActive
+                  ? "Administrator access includes the full petition, verified routing, PDF download, and email delivery without verification, payment, or petition limits."
+                  : "Share the facts. We will structure the petition and suggest the right route."}
               </p>
             </div>
 
@@ -2395,6 +2462,7 @@ export default function App() {
                 )
               }
               disabled={
+                !adminActive &&
                 accessStatus.enabled &&
                 Boolean(
                   verifiedUser
@@ -2404,6 +2472,7 @@ export default function App() {
                 ...inputStyle,
 
                 backgroundColor:
+                  !adminActive &&
                   accessStatus.enabled &&
                   verifiedUser
                     ? "#edf5ef"
@@ -2411,7 +2480,8 @@ export default function App() {
               }}
             />
 
-            {accessStatus.enabled &&
+            {!adminActive &&
+              accessStatus.enabled &&
               verifiedUser && (
               <div
                 style={{
@@ -2442,9 +2512,10 @@ export default function App() {
             <button
               disabled={
                 loading ||
-                accessLoading ||
+                (!adminActive && accessLoading) ||
                 !description.trim() ||
                 (
+                  !adminActive &&
                   accessStatus.enabled &&
                   !verifiedUser
                 )
@@ -2453,8 +2524,9 @@ export default function App() {
                 padding: "16px",
                 backgroundColor:
                   loading ||
-                  accessLoading ||
+                  (!adminActive && accessLoading) ||
                   (
+                    !adminActive &&
                     accessStatus.enabled &&
                     !verifiedUser
                   )
@@ -2467,8 +2539,9 @@ export default function App() {
                 borderRadius: "10px",
                 cursor:
                   loading ||
-                  accessLoading ||
+                  (!adminActive && accessLoading) ||
                   (
+                    !adminActive &&
                     accessStatus.enabled &&
                     !verifiedUser
                   )
@@ -2478,6 +2551,8 @@ export default function App() {
             >
               {loading
                 ? "Generating..."
+                : adminActive
+                ? "Generate Full Petition — Unlimited Admin Access"
                 : accessStatus.enabled &&
                   accessStatus.freeRemaining > 0
                 ? "Generate My Free Petition"
@@ -2558,7 +2633,9 @@ export default function App() {
 
               <button
                 onClick={
-                  unlockMode ===
+                  adminActive
+                    ? () => unlockByTxRef(txRef)
+                    : unlockMode ===
                   "free"
                     ? handleFreeUnlock
                     : handlePay
@@ -2587,6 +2664,8 @@ export default function App() {
               >
                 {loading
                   ? "Processing..."
+                  : adminActive
+                  ? "Unlock Full Petition — Administrator"
                   : unlockMode ===
                     "free"
                   ? routingDecision?.routeKey ===
@@ -2700,6 +2779,29 @@ export default function App() {
             >
               Open Email & Send Petition
             </a>
+          )}
+
+          {adminActive && (
+            <button
+              type="button"
+              onClick={draftAnotherAdminPetition}
+              style={{
+                display: "block",
+                margin: "16px auto 0",
+                padding: "16px",
+                backgroundColor: "#ffffff",
+                color: "#006600",
+                border: "2px solid #006600",
+                borderRadius: "12px",
+                fontSize: "17px",
+                fontWeight: "bold",
+                maxWidth: "400px",
+                width: "100%",
+                cursor: "pointer",
+              }}
+            >
+              Draft Another Petition
+            </button>
           )}
         </div>
       )}

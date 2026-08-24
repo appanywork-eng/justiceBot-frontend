@@ -98,6 +98,7 @@ function StatCard({
 export default function AdminControlCentre({
   apiBase,
   adminToken,
+  onDraftPetition,
   onExit,
 }) {
   const [
@@ -466,6 +467,22 @@ export default function AdminControlCentre({
               "100%",
           }}
         >
+          <button
+            type="button"
+            onClick={onDraftPetition}
+            style={{
+              border: "1px solid #075f20",
+              background: "#075f20",
+              color: "#ffffff",
+              borderRadius: "9px",
+              padding: "10px 13px",
+              fontWeight: 800,
+              flex: "1 1 150px",
+            }}
+          >
+            Draft Petition
+          </button>
+
           <button
             type="button"
             onClick={
