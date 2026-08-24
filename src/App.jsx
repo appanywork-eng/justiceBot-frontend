@@ -1793,14 +1793,14 @@ export default function App() {
         }
       />
 
-      <HeroSection />
+      {!adminActive && <HeroSection />}
 
       <main className="pd-main-content">
-        <HowItWorks />
+        {!adminActive && <HowItWorks />}
 
-        <SupportedIssues />
+        {!adminActive && <SupportedIssues />}
 
-        <PetitionProgress
+        {!adminActive && <PetitionProgress
           currentStep={
             unlocked
               ? 3
@@ -1808,10 +1808,10 @@ export default function App() {
               ? 2
               : 1
           }
-        />
+        />}
 
       {/* Admin modal */}
-      {adminModalOpen && (
+      {!adminActive && adminModalOpen && (
         <div
           style={{
             position: "fixed",
@@ -1893,6 +1893,7 @@ export default function App() {
         />
       )}
 
+      {!adminActive && (
       <section id="draft-petition">
       <FreeAccessPanel
         enabled={
@@ -2718,9 +2719,10 @@ export default function App() {
       )}
 
       </section>
+      )}
       </main>
 
-      <SiteFooter />
+      {!adminActive && <SiteFooter />}
     </div>
   );
 }

@@ -17,32 +17,40 @@ export default function SiteHeader({
           className="pd-navigation"
           aria-label="Main navigation"
         >
-          <a href="#draft-petition">
-            Draft
-          </a>
+          {adminActive ? (
+            <>
+              <a href="#admin-control-centre">
+                Control Centre
+              </a>
 
-          <a href="#how-it-works">
-            How it works
-          </a>
+              <a
+                href="/admin/support"
+                className="pd-navigation__admin"
+              >
+                Support Inbox
+              </a>
+            </>
+          ) : (
+            <>
+              <a href="#draft-petition">
+                Draft
+              </a>
 
-          <a href="#supported-issues">
-            Issues
-          </a>
+              <a href="#how-it-works">
+                How it works
+              </a>
 
-          <a
-            href="/contact"
-            className="pd-navigation__support"
-          >
-            Support
-          </a>
+              <a href="#supported-issues">
+                Issues
+              </a>
 
-          {adminActive && (
-            <a
-              href="/admin/support"
-              className="pd-navigation__admin"
-            >
-              Inbox
-            </a>
+              <a
+                href="/contact"
+                className="pd-navigation__support"
+              >
+                Support
+              </a>
+            </>
           )}
         </nav>
       </div>

@@ -460,6 +460,10 @@ export default function AdminControlCentre({
               "flex",
             gap:
               "8px",
+            flexWrap:
+              "wrap",
+            width:
+              "100%",
           }}
         >
           <button
@@ -480,6 +484,8 @@ export default function AdminControlCentre({
                 "10px 13px",
               fontWeight:
                 800,
+              flex:
+                "1 1 120px",
             }}
           >
             Refresh
@@ -500,6 +506,7 @@ export default function AdminControlCentre({
               borderRadius: "9px",
               padding: "10px 13px",
               fontWeight: 800,
+              flex: "1 1 140px",
             }}
           >
             {activeAction === "reload-sectors" ? "Refreshing…" : "Refresh Routes"}
@@ -515,6 +522,7 @@ export default function AdminControlCentre({
               borderRadius: "9px",
               padding: "10px 13px",
               fontWeight: 800,
+              flex: "1 1 140px",
             }}
           >
             Support Inbox
@@ -538,6 +546,8 @@ export default function AdminControlCentre({
                 "10px 13px",
               fontWeight:
                 800,
+              flex:
+                "1 1 120px",
             }}
           >
             Exit Admin
