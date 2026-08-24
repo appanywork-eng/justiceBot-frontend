@@ -11,6 +11,32 @@ import SiteHeader from "./components/layout/SiteHeader.jsx";
 import SupportedIssues from "./components/layout/SupportedIssues.jsx";
 import useFirebaseIdentity from "./hooks/useFirebaseIdentity.js";
 
+function anonymousVisitorId() {
+  try {
+    const storageKey = "petitiondesk_anonymous_visitor_id";
+    const existing = window.localStorage.getItem(storageKey) || "";
+
+    if (/^[a-zA-Z0-9_-]{16,128}$/.test(existing)) {
+      return existing;
+    }
+
+    const identifier = window.crypto?.randomUUID?.().replace(/-/g, "") ||
+      (window.crypto?.getRandomValues
+        ? Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
+            .map((byte) => byte.toString(16).padStart(2, "0"))
+            .join("")
+        : "");
+
+    if (identifier) {
+      window.localStorage.setItem(storageKey, identifier);
+    }
+
+    return identifier;
+  } catch {
+    return "";
+  }
+}
+
 function humanizeCode(
   value
 ) {
@@ -1007,9 +1033,20 @@ export default function App() {
           false
         );
 
+        const retryAfterSeconds = Number(
+          data.retryAfterSeconds ||
+          res.headers.get("retry-after") ||
+          0
+        );
+        const retryMessage = retryAfterSeconds > 0
+          ? ` Please try again in about ${retryAfterSeconds} seconds.`
+          : "";
+        const requestReference = data.requestId
+          ? ` Reference: ${data.requestId}.`
+          : "";
+
         setError(
-          data.error ||
-          `Server error ${res.status}`
+          `${data.error || `Server error ${res.status}`}${retryMessage}${requestReference}`
         );
 
         return;
@@ -1583,14 +1620,35 @@ export default function App() {
   // ===========
   // Download PDF
   // ===========
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
     if (!petitionText) return;
-    const url = `${API_BASE}/download-pdf?text=${encodeURIComponent(petitionText)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
 
-    // ✅ only relock for normal users (admin mode stays unlocked for testing)
-    if (!adminActive) {
-      relockNow();
+    try {
+      const response = await fetch(`${API_BASE}/download-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: petitionText }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Your PDF could not be created. Please try again.");
+      }
+
+      const downloadUrl = URL.createObjectURL(await response.blob());
+      const download = document.createElement("a");
+      download.href = downloadUrl;
+      download.download = "petitiondesk-petition.pdf";
+      document.body.appendChild(download);
+      download.click();
+      download.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+
+      // Only relock after a successful download for non-administrators.
+      if (!adminActive) {
+        relockNow();
+      }
+    } catch (downloadError) {
+      setError(downloadError?.message || "Your PDF could not be downloaded.");
     }
   }
 
@@ -1623,6 +1681,17 @@ export default function App() {
         {
           method:
             "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              visitorId:
+                anonymousVisitorId(),
+            }),
         }
       ).catch(
         () => {}

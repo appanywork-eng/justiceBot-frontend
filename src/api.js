@@ -12,12 +12,20 @@ export async function generatePetition(form) {
       body: JSON.stringify(form),
     });
 
-    // Handle cold-start
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-      return { error: "Server error. Try again." };
+      return {
+        ...data,
+        error: data.error || "Server error. Please try again.",
+        status: response.status,
+        retryable: data.retryable === true || [429, 502, 503, 504].includes(response.status),
+        retryAfterSeconds: Number(
+          data.retryAfterSeconds || response.headers.get("retry-after") || 0
+        ),
+      };
     }
 
-    const data = await response.json();
     return data;
 
   } catch (err) {

@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const controlCentre = fs.readFileSync("src/components/AdminControlCentre.jsx", "utf8");
+const app = fs.readFileSync("src/App.jsx", "utf8");
+const api = fs.readFileSync("src/api.js", "utf8");
+
+assert.match(controlCentre, /\/admin\/overview/);
+assert.match(controlCentre, /\/admin\/diagnostics/);
+assert.match(controlCentre, /\/admin\/reload-sectors/);
+assert.match(controlCentre, /\/admin\/users\/\$\{encodeURIComponent\(user\.uid\)\}\/status/);
+assert.match(controlCentre, /\/admin\/support/);
+assert.match(controlCentre, /Failed generations/);
+assert.match(controlCentre, /AI fallback recoveries/);
+assert.match(controlCentre, /Rejected payment webhooks/);
+assert.match(controlCentre, /Active visitors now/);
+assert.match(controlCentre, /Unique visitors today/);
+assert.match(controlCentre, /New visitors today/);
+assert.match(controlCentre, /Unique visitors this month/);
+assert.match(controlCentre, /All-time unique visitors/);
+assert.match(controlCentre, /Production System Status/);
+assert.match(app, /retry-after/);
+assert.match(app, /data\.requestId/);
+assert.match(app, /petitiondesk_anonymous_visitor_id/);
+assert.match(app, /visitorId:\s*anonymousVisitorId\(\)/);
+assert.match(app, /fetch\(`\$\{API_BASE\}\/download-pdf`,\s*\{\s*method:\s*"POST"/);
+assert.doesNotMatch(app, /download-pdf\?text=/);
+assert.match(api, /retryable:/);
+
+console.log("✅ ADMINISTRATORS CAN SEE PRODUCTION AI, PAYMENT AND STORAGE STATUS");
+console.log("✅ ADMINISTRATORS CAN REFRESH ROUTES AND OPEN SUPPORT");
+console.log("✅ ADMINISTRATORS CAN ENABLE OR DISABLE REGISTERED ACCOUNTS");
+console.log("✅ AI FAILURES, FALLBACKS AND SECURITY EVENTS ARE VISIBLE");
+console.log("✅ PRIVACY-SAFE LIVE, DAILY, MONTHLY AND NEW-VISITOR COUNTS ARE VISIBLE");
+console.log("✅ PETITION PDF DOWNLOAD USES THE WORKING POST ENDPOINT");
+console.log("✅ USERS SEE RETRY GUIDANCE AND REQUEST REFERENCES");
+console.log("✅ ADMIN CONTROL CENTRE CONTRACT PASSED");

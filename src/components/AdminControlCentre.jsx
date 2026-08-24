@@ -118,6 +118,10 @@ export default function AdminControlCentre({
   ] =
     useState("");
 
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [actionMessage, setActionMessage] = useState("");
+  const [activeAction, setActiveAction] = useState("");
+
   const loadOverview =
     useCallback(
       async () => {
@@ -138,16 +142,16 @@ export default function AdminControlCentre({
         try {
           setError("");
 
-          const response =
-            await fetch(
-              `${apiBase}/admin/overview`,
-              {
-                headers: {
-                  "x-admin-token":
-                    adminToken,
-                },
-              }
-            );
+          const headers = {
+            "x-admin-token": adminToken,
+          };
+
+          const [response, diagnosticsResponse] =
+            await Promise.all([
+              fetch(`${apiBase}/admin/overview`, { headers }),
+              fetch(`${apiBase}/admin/diagnostics`, { headers })
+                .catch(() => null),
+            ]);
 
           const data =
             await response
@@ -168,6 +172,12 @@ export default function AdminControlCentre({
           setOverview(
             data
           );
+
+          if (diagnosticsResponse?.ok) {
+            setDiagnostics(
+              await diagnosticsResponse.json().catch(() => null)
+            );
+          }
         } catch (
           loadError
         ) {
@@ -187,6 +197,39 @@ export default function AdminControlCentre({
         adminToken,
       ]
     );
+
+  async function runAdminAction(action, path, {
+    method = "POST",
+    body,
+    successMessage,
+  } = {}) {
+    setActiveAction(action);
+    setActionMessage("");
+    setError("");
+
+    try {
+      const response = await fetch(`${apiBase}${path}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": adminToken,
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || "The administrator action could not be completed.");
+      }
+
+      setActionMessage(successMessage || "Administrator action completed.");
+      await loadOverview();
+    } catch (actionError) {
+      setError(actionError?.message || "The administrator action could not be completed.");
+    } finally {
+      setActiveAction("");
+    }
+  }
 
   useEffect(
     () => {
@@ -231,6 +274,26 @@ export default function AdminControlCentre({
       metrics.visits,
     ],
     [
+      "Active visitors now",
+      metrics.active_users,
+    ],
+    [
+      "Unique visitors today",
+      metrics.daily_users,
+    ],
+    [
+      "New visitors today",
+      metrics.new_users_today,
+    ],
+    [
+      "Unique visitors this month",
+      metrics.monthly_users,
+    ],
+    [
+      "All-time unique visitors",
+      metrics.total_unique_users,
+    ],
+    [
       "Registered users",
       usersSummary.registered_users,
     ],
@@ -257,6 +320,14 @@ export default function AdminControlCentre({
     [
       "Petition previews",
       metrics.previewed,
+    ],
+    [
+      "Failed generations",
+      metrics.generation_failed,
+    ],
+    [
+      "AI fallback recoveries",
+      metrics.ai_fallbacks,
     ],
     [
       "Free petition unlocks",
@@ -297,6 +368,18 @@ export default function AdminControlCentre({
     [
       "Admin sessions",
       metrics.admin_sessions,
+    ],
+    [
+      "Blocked generation requests",
+      metrics.generation_rate_limited,
+    ],
+    [
+      "Failed admin logins",
+      metrics.admin_login_failed,
+    ],
+    [
+      "Rejected payment webhooks",
+      metrics.webhook_rejected,
     ],
   ];
 
@@ -404,6 +487,41 @@ export default function AdminControlCentre({
 
           <button
             type="button"
+            onClick={() => runAdminAction(
+              "reload-sectors",
+              "/admin/reload-sectors",
+              { successMessage: "Institution routes and sector catalogues were refreshed." }
+            )}
+            disabled={Boolean(activeAction)}
+            style={{
+              border: "1px solid #0b7429",
+              background: "#ffffff",
+              color: "#0b7429",
+              borderRadius: "9px",
+              padding: "10px 13px",
+              fontWeight: 800,
+            }}
+          >
+            {activeAction === "reload-sectors" ? "Refreshing…" : "Refresh Routes"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.location.assign("/admin/support")}
+            style={{
+              border: "1px solid #0b7429",
+              background: "#ffffff",
+              color: "#0b7429",
+              borderRadius: "9px",
+              padding: "10px 13px",
+              fontWeight: 800,
+            }}
+          >
+            Support Inbox
+          </button>
+
+          <button
+            type="button"
             onClick={
               onExit
             }
@@ -467,8 +585,98 @@ export default function AdminControlCentre({
         </div>
       )}
 
+      {actionMessage && (
+        <div
+          style={{
+            marginTop: "14px",
+            padding: "12px",
+            background: "#eaf7ed",
+            border: "1px solid #a8d2ae",
+            borderRadius: "10px",
+            color: "#075f20",
+            fontWeight: 700,
+          }}
+        >
+          {actionMessage}
+        </div>
+      )}
+
       {overview && (
         <>
+          {diagnostics && (
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "16px",
+                background: "#ffffff",
+                borderRadius: "14px",
+                border: "1px solid #dce8dd",
+              }}
+            >
+              <h3 style={{ margin: "0 0 12px", color: "#174323" }}>
+                Production System Status
+              </h3>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                  gap: "12px",
+                  fontSize: "13px",
+                  color: "#334039",
+                }}
+              >
+                <div>
+                  <strong>AI generation:</strong>{" "}
+                  {diagnostics.ai?.configured ? "Ready" : "Not configured"}
+                  <br />
+                  <span>{diagnostics.ai?.model || "—"}</span>
+                </div>
+
+                <div>
+                  <strong>Fallback models:</strong>{" "}
+                  {diagnostics.ai?.fallbackModels?.join(", ") || "None"}
+                  <br />
+                  <span>Last success: {formatDate(diagnostics.ai?.lastAiSuccessAt)}</span>
+                </div>
+
+                <div>
+                  <strong>Payments:</strong>{" "}
+                  {diagnostics.payments?.configured ? "Ready" : "Not configured"}
+                  <br />
+                  <span>
+                    Webhook: {diagnostics.payments?.webhookConfigured ? "Protected" : "Needs attention"}
+                  </span>
+                </div>
+
+                <div>
+                  <strong>Access policy:</strong>{" "}
+                  {diagnostics.access?.freeAccessEnabled
+                    ? `${diagnostics.access?.freePetitionLimit || 0} free petitions`
+                    : "Free access disabled"}
+                  <br />
+                  <span>Then ₦{number(diagnostics.payments?.amountNgn)}</span>
+                </div>
+
+                <div>
+                  <strong>Storage:</strong>{" "}
+                  {diagnostics.storage?.firestoreAvailable ? "Firestore connected" : "Local memory"}
+                  <br />
+                  <span>
+                    Rate limiting: {diagnostics.storage?.sharedRateLimiting ? "Shared" : "Instance-only"}
+                  </span>
+                </div>
+
+                <div>
+                  <strong>Deployed revision:</strong>{" "}
+                  {diagnostics.revision || "—"}
+                  <br />
+                  <span>Last AI error: {diagnostics.ai?.lastAiErrorCode || "None"}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             style={{
               display:
@@ -587,6 +795,7 @@ export default function AdminControlCentre({
                       "Free used",
                       "Free left",
                       "Status",
+                      "Action",
                     ].map(
                       (
                         heading
@@ -617,7 +826,7 @@ export default function AdminControlCentre({
                     <tr>
                       <td
                         colSpan={
-                          7
+                          8
                         }
                         style={{
                           padding:
@@ -741,6 +950,43 @@ export default function AdminControlCentre({
                               : user.requiresPayment
                               ? "Paid access required"
                               : "Free access available"}
+                          </td>
+
+                          <td
+                            style={{
+                              padding: "11px",
+                              borderBottom: "1px solid #edf1ed",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              disabled={Boolean(activeAction)}
+                              onClick={() => runAdminAction(
+                                `user-${user.uid}`,
+                                `/admin/users/${encodeURIComponent(user.uid)}/status`,
+                                {
+                                  method: "PATCH",
+                                  body: { disabled: !user.disabled },
+                                  successMessage: user.disabled
+                                    ? `${user.email || "User"} was re-enabled.`
+                                    : `${user.email || "User"} was disabled.`,
+                                }
+                              )}
+                              style={{
+                                border: `1px solid ${user.disabled ? "#0b7429" : "#a11"}`,
+                                borderRadius: "8px",
+                                padding: "6px 9px",
+                                background: "#ffffff",
+                                color: user.disabled ? "#0b7429" : "#a11",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {activeAction === `user-${user.uid}`
+                                ? "Saving…"
+                                : user.disabled
+                                  ? "Enable"
+                                  : "Disable"}
+                            </button>
                           </td>
                         </tr>
                       )
