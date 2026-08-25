@@ -44,6 +44,10 @@ export default function SiteHeader({
                 Issues
               </a>
 
+              <a href="/guides/">
+                Guides
+              </a>
+
               <a
                 href="/contact"
                 className="pd-navigation__support"

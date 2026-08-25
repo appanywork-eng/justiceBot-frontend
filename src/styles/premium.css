@@ -826,6 +826,11 @@ a {
   background: rgba(255, 255, 255, 0.82);
   font-size: 12.5px;
   font-weight: 730;
+  text-decoration: none;
+}
+
+.pd-issue-chip:hover {
+  border-color: var(--pd-green-700);
 }
 
 .pd-issue-chip span {
@@ -912,6 +917,7 @@ a {
 
 .pd-footer nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 19px;
 }
 

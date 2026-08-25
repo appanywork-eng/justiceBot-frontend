@@ -1,14 +1,20 @@
 const issues = [
-  ["▦", "Banks & finance"],
-  ["⌁", "Telecoms"],
-  ["ϟ", "Power & utilities"],
-  ["✈", "Aviation"],
-  ["+", "Health & insurance"],
-  ["◆", "Education"],
-  ["◈", "Police & security"],
-  ["⌂", "Landlord & civil"],
-  ["⚖", "Anti-corruption"],
-  ["◎", "Diaspora & consular"],
+  ["▦", "Banks & finance", "banking-and-financial-complaints"],
+  ["⌁", "Telecoms", "telecom-airtime-data-and-network-complaints"],
+  ["ϟ", "Power & electricity", "electricity-billing-and-meter-complaints"],
+  ["✈", "Aviation", "flight-delay-cancellation-and-refund-complaints"],
+  ["+", "Health & public insurance", "hospital-hmo-and-health-insurance-complaints"],
+  ["◉", "Insurance", "insurance-policy-and-claim-complaints"],
+  ["◷", "Pensions", "pension-and-retirement-benefit-complaints"],
+  ["◆", "Education", "school-university-and-examination-complaints"],
+  ["◈", "Police & security", "police-security-and-detention-complaints"],
+  ["⌂", "Landlord & civil", "tenancy-landlord-and-civil-disputes"],
+  ["⚖", "Anti-corruption", "corruption-and-public-procurement-complaints"],
+  ["▧", "Public administration", "public-service-and-administrative-complaints"],
+  ["§", "Judiciary", "judicial-conduct-and-court-service-complaints"],
+  ["◎", "Diaspora & consular", "diaspora-embassy-and-consular-complaints"],
+  ["↗", "International escalation", "international-human-rights-escalation"],
+  ["▤", "Urban planning", "land-planning-and-building-control-complaints"],
 ];
 
 export default function SupportedIssues() {
@@ -38,9 +44,11 @@ export default function SupportedIssues() {
           ([
             icon,
             label,
+            slug,
           ]) => (
-            <div
+            <a
               className="pd-issue-chip"
+              href={`/guides/${slug}/`}
               key={
                 label
               }
@@ -54,7 +62,7 @@ export default function SupportedIssues() {
               {
                 label
               }
-            </div>
+            </a>
           )
         )}
       </div>

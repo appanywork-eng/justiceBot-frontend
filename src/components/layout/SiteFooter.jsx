@@ -23,6 +23,26 @@ export default function SiteFooter() {
             How it works
           </a>
 
+          <a href="/guides/">
+            Complaint guides
+          </a>
+
+          <a href="/about/">
+            About
+          </a>
+
+          <a href="/privacy/">
+            Privacy
+          </a>
+
+          <a href="/terms/">
+            Terms
+          </a>
+
+          <a href="/editorial-policy/">
+            Editorial policy
+          </a>
+
           <a href="/contact">
             Support
           </a>
