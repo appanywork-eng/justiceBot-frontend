@@ -8,11 +8,14 @@
     "prebuild": "node scripts/build-editorial-content.mjs",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "npm run test:all",
+    "test:all": "npm run test:payment-identity && npm run test:banking-form && npm run test:pricing-policy && npm run test:admin-control-centre && npm run test:publisher-compliance && npm run test:complex-routing-ui",
     "test:payment-identity": "node scripts/test-payment-identity.mjs",
     "test:banking-form": "node scripts/test-banking-form.mjs",
     "test:pricing-policy": "node scripts/test-pricing-policy.mjs",
     "test:admin-control-centre": "node scripts/test-admin-control-centre.mjs",
-    "test:publisher-compliance": "node scripts/test-publisher-compliance.mjs"
+    "test:publisher-compliance": "node scripts/test-publisher-compliance.mjs",
+    "test:complex-routing-ui": "node scripts/test-complex-routing-ui.mjs"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

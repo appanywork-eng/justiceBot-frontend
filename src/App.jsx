@@ -223,10 +223,11 @@ function likelyBankingMatter({
 function RoutingDecisionCard({
   decision,
   emailRoutingAvailable,
+  onConfirmRoute,
+  confirming = false,
 }) {
   if (
-    !decision ||
-    decision.matched !== true
+    !decision
   ) {
     return null;
   }
@@ -346,23 +347,27 @@ function RoutingDecisionCard({
         </div>
       )}
 
-      <div>
-        <strong>
-          Document:
-        </strong>{" "}
-        {
-          decision.documentPurpose
-        }
-      </div>
+      {decision.documentPurpose && (
+        <div>
+          <strong>
+            Document:
+          </strong>{" "}
+          {
+            decision.documentPurpose
+          }
+        </div>
+      )}
 
-      <div>
-        <strong>
-          Recipient:
-        </strong>{" "}
-        {
-          decision.primaryInstitution
-        }
-      </div>
+      {decision.primaryInstitution && (
+        <div>
+          <strong>
+            Proposed recipient:
+          </strong>{" "}
+          {
+            decision.primaryInstitution
+          }
+        </div>
+      )}
 
       {Array.isArray(
         decision.ccInstitutions
@@ -381,14 +386,132 @@ function RoutingDecisionCard({
           </div>
         )}
 
-      <div>
-        <strong>
-          Jurisdiction:
-        </strong>{" "}
-        {jurisdictionLabel(
-          decision.jurisdiction
-        )}
-      </div>
+      {Array.isArray(
+        decision.suggestedInstitutions
+      ) &&
+        decision.suggestedInstitutions.length > 0 && (
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "12px",
+            borderRadius: "10px",
+            background: "#fff7df",
+            border: "1px solid #e0c77b",
+          }}
+        >
+          <strong>
+            Possible escalation—not automatically added:
+          </strong>{" "}
+          {decision.suggestedInstitutions.join(", ")}
+        </div>
+      )}
+
+      {Array.isArray(
+        decision.suggestedMandates
+      ) &&
+        decision.suggestedMandates.length > 0 && (
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "12px",
+            borderRadius: "10px",
+            background: "#fff7df",
+            border: "1px solid #e0c77b",
+          }}
+        >
+          <strong>
+            Additional routes requiring factual confirmation:
+          </strong>
+          <ul
+            style={{
+              margin: "8px 0 0 20px",
+              padding: 0,
+            }}
+          >
+            {decision.suggestedMandates.map(
+              (mandate, index) => (
+                <li key={`${index}-${mandate}`}>
+                  {mandate}
+                </li>
+              )
+            )}
+          </ul>
+        </div>
+      )}
+
+      {decision.jurisdiction && (
+        <div>
+          <strong>
+            Jurisdiction:
+          </strong>{" "}
+          {jurisdictionLabel(
+            decision.jurisdiction
+          )}
+        </div>
+      )}
+
+      {Array.isArray(
+        decision.clarificationQuestions
+      ) &&
+        decision.clarificationQuestions.length > 0 && (
+        <div
+          style={{
+            marginTop: "14px",
+            padding: "13px",
+            borderRadius: "10px",
+            background: "#ffffff",
+            border: "1px solid #d6ad42",
+          }}
+        >
+          <strong>
+            Information to confirm:
+          </strong>
+          <ul
+            style={{
+              margin: "8px 0 0 20px",
+              padding: 0,
+            }}
+          >
+            {decision.clarificationQuestions.map(
+              (question, index) => (
+                <li key={`${index}-${question}`}>
+                  {question}
+                </li>
+              )
+            )}
+          </ul>
+        </div>
+      )}
+
+      {decision.requiresRecipientConfirmation === true &&
+        typeof onConfirmRoute === "function" && (
+        <button
+          type="button"
+          onClick={onConfirmRoute}
+          disabled={confirming}
+          style={{
+            display: "block",
+            width: "100%",
+            marginTop: "16px",
+            padding: "14px 16px",
+            border: 0,
+            borderRadius: "10px",
+            background: confirming
+              ? "#aaa"
+              : "#006600",
+            color: "#ffffff",
+            fontWeight: "800",
+            fontSize: "16px",
+            cursor: confirming
+              ? "not-allowed"
+              : "pointer",
+          }}
+        >
+          {confirming
+            ? "Confirming route..."
+            : `Confirm ${decision.primaryInstitution || "this recipient"} and draft`}
+        </button>
+      )}
 
       {bankingTiming && (
         <div
@@ -545,6 +668,8 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
+  const [supportingEvidence, setSupportingEvidence] = useState("");
+  const [desiredOutcome, setDesiredOutcome] = useState("");
 
   const [
     disputeLocation,
@@ -941,8 +1066,13 @@ export default function App() {
   // ===========
   // Generate
   // ===========
-  async function handleGenerate(e) {
-    e.preventDefault();
+  async function handleGenerate(
+    e,
+    {
+      confirmSuggestedRoute = false,
+    } = {}
+  ) {
+    e?.preventDefault?.();
     setError("");
 
     if (
@@ -1047,6 +1177,14 @@ export default function App() {
             unresolvedComplaint
               ? providerResponseStatus
               : "",
+
+          supportingEvidence:
+            supportingEvidence.trim(),
+
+          desiredOutcome:
+            desiredOutcome.trim(),
+
+          confirmSuggestedRoute,
 
           petitioner: {
             fullName: fullName.trim(),
@@ -1679,13 +1817,41 @@ export default function App() {
   // Download PDF
   // ===========
   async function handleDownloadPdf() {
-    if (!petitionText) return;
+    if (!petitionText || !txRef) {
+      setError(
+        "This petition reference is no longer available. Unlock the petition again before downloading."
+      );
+      return;
+    }
 
     try {
+      const identityHeaders =
+        adminActive
+          ? {
+              "Content-Type":
+                "application/json",
+            }
+          : await buildIdentityHeaders();
+
+      const adminToken =
+        adminActive
+          ? getAdminToken()
+          : "";
+
       const response = await fetch(`${API_BASE}/download-pdf`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: petitionText }),
+        headers: {
+          ...identityHeaders,
+          ...(adminToken
+            ? {
+                "x-admin-token":
+                  adminToken,
+              }
+            : {}),
+        },
+        body: JSON.stringify({
+          tx_ref: txRef,
+        }),
       });
 
       if (!response.ok) {
@@ -2042,7 +2208,15 @@ export default function App() {
             </div>
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Full Name</label>
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              style={inputStyle}
+              minLength={2}
+              maxLength={120}
+              autoComplete="name"
+              required
+            />
 
             <label
               style={{
@@ -2062,6 +2236,10 @@ export default function App() {
                 )
               }
               style={inputStyle}
+              minLength={5}
+              maxLength={250}
+              autoComplete="street-address"
+              required
             />
 
             <label
@@ -2120,6 +2298,9 @@ export default function App() {
               }
               style={inputStyle}
               placeholder="For example: AEDC, MTN, GTBank, Air Peace or a government agency"
+              minLength={2}
+              maxLength={300}
+              required
             />
 
             <div
@@ -2177,6 +2358,7 @@ export default function App() {
                 }
               }}
               style={inputStyle}
+              required
             >
               <option value="">
                 Select where you are in the complaint process
@@ -2478,6 +2660,8 @@ export default function App() {
                     ? "#edf5ef"
                     : "#ffffff",
               }}
+              autoComplete="email"
+              required
             />
 
             {!adminActive &&
@@ -2500,13 +2684,49 @@ export default function App() {
             )}
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Phone</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              style={inputStyle}
+              minLength={5}
+              maxLength={40}
+              autoComplete="tel"
+              required
+            />
 
             <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>Your Complaint</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               style={{ ...inputStyle, minHeight: "160px", resize: "vertical" }}
+              minLength={20}
+              maxLength={10000}
+              required
+            />
+
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
+              Supporting evidence available (optional)
+            </label>
+
+            <textarea
+              value={supportingEvidence}
+              onChange={(event) => setSupportingEvidence(event.target.value)}
+              style={{ ...inputStyle, minHeight: "100px", resize: "vertical" }}
+              placeholder="List documents, receipts, messages, complaint references, witness information or other records you can attach. Do not paste passwords or private access codes."
+              maxLength={4000}
+            />
+
+            <label style={{ fontWeight: "600", color: "#222", fontSize: "15px" }}>
+              What outcome do you want? (optional)
+            </label>
+
+            <textarea
+              value={desiredOutcome}
+              onChange={(event) => setDesiredOutcome(event.target.value)}
+              style={{ ...inputStyle, minHeight: "90px", resize: "vertical" }}
+              placeholder="For example: investigation, correction, refund, written explanation, disciplinary review or another lawful remedy."
+              maxLength={2000}
             />
 
             <button
@@ -2514,6 +2734,12 @@ export default function App() {
                 loading ||
                 (!adminActive && accessLoading) ||
                 !description.trim() ||
+                !fullName.trim() ||
+                !address.trim() ||
+                !phone.trim() ||
+                !disputeLocation.trim() ||
+                !institutionName.trim() ||
+                !escalationStage ||
                 (
                   !adminActive &&
                   accessStatus.enabled &&
@@ -2574,6 +2800,18 @@ export default function App() {
                 }
                 emailRoutingAvailable={
                   false
+                }
+                confirming={
+                  loading
+                }
+                onConfirmRoute={() =>
+                  handleGenerate(
+                    null,
+                    {
+                      confirmSuggestedRoute:
+                        true,
+                    }
+                  )
                 }
               />
             </div>

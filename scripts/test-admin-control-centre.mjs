@@ -13,6 +13,10 @@ assert.match(controlCentre, /\/admin\/users\/\$\{encodeURIComponent\(user\.uid\)
 assert.match(controlCentre, /\/admin\/support/);
 assert.match(controlCentre, /Failed generations/);
 assert.match(controlCentre, /AI fallback recoveries/);
+assert.match(controlCentre, /Critical cases analysed/);
+assert.match(controlCentre, /Routing clarifications/);
+assert.match(controlCentre, /Draft quality rejections/);
+assert.match(controlCentre, /Routing safety:/);
 assert.match(controlCentre, /Rejected payment webhooks/);
 assert.match(controlCentre, /Active visitors now/);
 assert.match(controlCentre, /Unique visitors today/);

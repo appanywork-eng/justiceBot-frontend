@@ -331,6 +331,22 @@ export default function AdminControlCentre({
       metrics.ai_fallbacks,
     ],
     [
+      "Critical cases analysed",
+      metrics.critical_cases,
+    ],
+    [
+      "Routing clarifications",
+      metrics.routing_clarifications,
+    ],
+    [
+      "Route confirmations",
+      metrics.routing_confirmations,
+    ],
+    [
+      "Draft quality rejections",
+      metrics.semantic_quality_failures,
+    ],
+    [
       "Free petition unlocks",
       metrics.unlocked_free,
     ],
@@ -699,6 +715,15 @@ export default function AdminControlCentre({
                   {diagnostics.revision || "—"}
                   <br />
                   <span>Last AI error: {diagnostics.ai?.lastAiErrorCode || "None"}</span>
+                </div>
+
+                <div>
+                  <strong>Routing safety:</strong>{" "}
+                  {number(diagnostics.routing?.criticalCases)} critical cases
+                  <br />
+                  <span>
+                    {number(diagnostics.routing?.semanticQualityFailures)} unsafe drafts rejected
+                  </span>
                 </div>
               </div>
             </div>
