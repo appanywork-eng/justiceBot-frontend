@@ -37,6 +37,27 @@ function anonymousVisitorId() {
   }
 }
 
+function generationRequestReference() {
+  const randomPart =
+    window.crypto?.randomUUID?.()
+      ?.replace(/-/g, "")
+      .slice(0, 16) ||
+    Math.random()
+      .toString(36)
+      .slice(2, 18);
+
+  return `pd-web-${Date.now()}-${randomPart}`;
+}
+
+function isFetchNetworkError(error) {
+  return (
+    error instanceof TypeError &&
+    /fetch|network|load failed/i.test(
+      String(error?.message || "")
+    )
+  );
+}
+
 function humanizeCode(
   value
 ) {
@@ -1126,6 +1147,9 @@ export default function App() {
     setRoutingDecision(null);
     setEmailRoutingAvailable(false);
 
+    const generationRequestId =
+      generationRequestReference();
+
     try {
       const adminToken = adminActive ? getAdminToken() : "";
 
@@ -1142,6 +1166,7 @@ export default function App() {
         headers: {
           ...generationHeaders,
           ...(adminToken ? { "x-admin-token": adminToken } : {}),
+          "x-request-id": generationRequestId,
         },
         body: JSON.stringify({
           complaint:
@@ -1290,7 +1315,13 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      setError(err?.message || "Failed to generate petition");
+
+      setError(
+        isFetchNetworkError(err)
+          ? `The connection was interrupted while PetitionDesk was drafting. Your information remains on this page; check your internet connection and try Generate again. Reference: ${generationRequestId}.`
+          : err?.message ||
+            "Failed to generate petition"
+      );
     } finally {
       setLoading(false);
     }

@@ -86,9 +86,20 @@ assert.match(
   /desiredOutcome:\s*desiredOutcome\.trim\(\)/
 );
 
+assert.match(
+  app,
+  /"x-request-id":\s*generationRequestId/
+);
+
+assert.match(
+  app,
+  /The connection was interrupted while PetitionDesk was drafting/
+);
+
 console.log("✅ AMBIGUOUS ROUTES SHOW CLARIFICATION QUESTIONS");
 console.log("✅ INFERRED RECIPIENTS REQUIRE AN EXPLICIT CONFIRMATION ACTION");
 console.log("✅ SAFE ROUTING FIELDS ARE REQUIRED BEFORE GENERATION");
 console.log("✅ STRUCTURED EVIDENCE AND DESIRED RELIEF REACH THE DRAFTING PIPELINE");
 console.log("✅ PDF DOWNLOAD USES AN OWNED PETITION REFERENCE, NOT ARBITRARY TEXT");
+console.log("✅ NETWORK FAILURES SHOW A TRACEABLE REQUEST REFERENCE");
 console.log("✅ COMPLEX ROUTING UI CONTRACT PASSED");
